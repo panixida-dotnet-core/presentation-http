@@ -1,197 +1,238 @@
-## What to do after creating a repository from this template
+# PANiXiDA.Core.Presentation.Http
 
-### 1. Rename repository metadata
-- change repository name
-- change solution / project names
-- change package ID
-- change assembly name
-- change repository URLs
-- change ProjectReference in test project
+`PANiXiDA.Core.Presentation.Http` is a reusable ASP.NET Core HTTP presentation package for PANiXiDA applications.
 
-### 2. Update package metadata
-- description
-- tags
-
-### 3. Update documentation
-- replace this template README with the project README
-- fill all placeholder sections
-- update badges
-- update installation instructions
-- add real usage examples
-
-### 4. Configure GitHub repository
-- check repository visibility
-- configure default branch
-- configure branch protection rules
-- configure Issues / Discussions if needed
-- configure repository description, topics and website
-
-### 5. Prepare the first release
-- update versioning configuration pathFilters in version.json
-- verify NuGet metadata
-- verify README and icon inside the package
-- publish the first package version
-- the version is updated automatically based on the commit history
-
----
-
-# Universal README template for the NuGet package
-
-# <PackageName>
-
-`<PackageName>` is a .NET library for <short purpose>.
-
-It is designed for <target audience> who need <main value / main scenario>.
+It provides common Minimal API endpoint conventions, API versioning, OpenAPI setup, Problem Details handling, request logging, exception handling, forwarded headers configuration, and helpers for mapping `PANiXiDA.Core.ResultPattern` results to HTTP responses.
 
 ## Status
 
-[![CI](https://github.com/<OWNER>/<REPOSITORY>/actions/workflows/ci.yml/badge.svg)](https://github.com/<OWNER>/<REPOSITORY>/actions/workflows/ci.yml)
-[![NuGet](https://img.shields.io/nuget/v/<PACKAGE_ID>.svg)](https://www.nuget.org/packages/<PACKAGE_ID>)
-[![NuGet downloads](https://img.shields.io/nuget/dt/<PACKAGE_ID>.svg)](https://www.nuget.org/packages/<PACKAGE_ID>)
+[![CI](https://github.com/panixida-dotnet-core/presentation-http/actions/workflows/ci.yml/badge.svg)](https://github.com/panixida-dotnet-core/presentation-http/actions/workflows/ci.yml)
+[![NuGet](https://img.shields.io/nuget/v/PANiXiDA.Core.Presentation.Http.svg)](https://www.nuget.org/packages/PANiXiDA.Core.Presentation.Http)
+[![NuGet downloads](https://img.shields.io/nuget/dt/PANiXiDA.Core.Presentation.Http.svg)](https://www.nuget.org/packages/PANiXiDA.Core.Presentation.Http)
 [![Target Framework](https://img.shields.io/badge/target-net10.0-512BD4)](https://dotnet.microsoft.com/)
-[![License](https://img.shields.io/github/license/<OWNER>/<REPOSITORY>.svg)](LICENSE)
-
-## Overview
-
-Describe:
-
-- what problem this package solves;
-- why it exists;
-- where it fits in the system or ecosystem;
-- how it differs from alternatives, if that matters.
-
-Keep this section short and practical.
+[![License](https://img.shields.io/github/license/panixida-dotnet-core/presentation-http.svg)](LICENSE)
 
 ## Features
 
-- Feature 1
-- Feature 2
-- Feature 3
-- Feature 4
-- Feature 5
+- `AddHttp` registers the default HTTP presentation services.
+- `MapHttp` adds the default middleware pipeline and maps discovered endpoint groups.
+- `IEndpointGroup` defines route groups for Minimal API endpoints.
+- `IEndpoint<TGroup>` defines endpoints that belong to a specific group.
+- `EndpointMapper` discovers and maps endpoints in a deterministic type-name order.
+- `EndpointConstants.EndpointPrefix` defines `/api/v{version:apiVersion}`.
+- `ResultHttpMapper` maps `Result` and `Result<T>` to `IResult`.
 
-## Quick Start
+## Requirements
 
-### Requirements
+- .NET 10 SDK.
+- ASP.NET Core Minimal API application.
 
-- .NET 10 SDK
-
-### Installation
+## Installation
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="<PACKAGE_ID>" Version="..." />
+  <PackageReference Include="PANiXiDA.Core.Presentation.Http" Version="1.0.0" />
 </ItemGroup>
-````
-
-### Minimal import
-
-```csharp
-using <RootNamespace>;
 ```
 
-### First example
+## Quick Start
 
 ```csharp
-// Add a minimal example here
+using PANiXiDA.Core.Presentation.Http.DependencyInjection;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddHttp(builder.Configuration.GetSection("ForwardedHeaders"));
+
+var app = builder.Build();
+
+app.MapHttp(typeof(Program).Assembly);
+
+app.Run();
 ```
 
-## Usage
-
-### Basic usage
+Pass `null` to `AddHttp` if forwarded headers should use the package defaults.
 
 ```csharp
-// Add a basic example here
+builder.Services.AddHttp(configuration: null);
 ```
 
-### Typical scenario
+## Forwarded Headers
+
+The package configures these forwarded headers by default:
 
 ```csharp
-// Add a realistic example here
+ForwardedHeaders.XForwardedFor |
+ForwardedHeaders.XForwardedHost |
+ForwardedHeaders.XForwardedProto
 ```
 
-### Advanced scenario
+Additional values can be bound from the standard ASP.NET Core `ForwardedHeadersOptions` model by passing a configuration section to `AddHttp`.
+
+```json
+{
+  "ForwardedHeaders": {
+    "ForwardedHeaders": "XForwardedFor, XForwardedHost, XForwardedProto",
+    "ForwardLimit": 2,
+    "RequireHeaderSymmetry": true,
+    "AllowedHosts": [
+      "api.example.com"
+    ]
+  }
+}
+```
+
+For advanced scenarios, configure `ForwardedHeadersOptions` directly after `AddHttp`.
 
 ```csharp
-// Add an advanced example here if needed
+using Microsoft.AspNetCore.HttpOverrides;
+
+builder.Services.AddHttp(builder.Configuration.GetSection("ForwardedHeaders"));
+
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.KnownProxies.Clear();
+    options.KnownIPNetworks.Clear();
+});
 ```
 
-## Configuration
+## Endpoint Groups
 
-Describe configuration only if the package actually requires it.
+An endpoint group owns a route prefix, tags, and the call to map endpoints that belong to the group.
 
-Possible topics:
+```csharp
+using Microsoft.AspNetCore.Routing;
 
-* environment variables;
-* `appsettings.json`;
-* feature flags;
-* external services;
-* secrets;
-* runtime prerequisites.
+using PANiXiDA.Core.Presentation.Http.Endpoints;
 
-If the package does not require runtime configuration, say so explicitly.
+public sealed class OrdersEndpointGroup : IEndpointGroup
+{
+    public void Map(IEndpointRouteBuilder endpoints)
+    {
+        var group = endpoints.MapGroup(EndpointConstants.EndpointPrefix)
+            .MapGroup("/orders")
+            .WithTags("Orders");
+
+        EndpointMapper.MapGroupEndpoints<OrdersEndpointGroup>(group, endpoints.ServiceProvider);
+    }
+}
+```
+
+The final route prefix is `/api/v{version}/orders`.
+
+## Endpoints
+
+An endpoint implements `IEndpoint<TGroup>`, where `TGroup` is the endpoint group it belongs to.
+
+```csharp
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
+
+using PANiXiDA.Core.Presentation.Http.Endpoints;
+
+public sealed class GetOrderEndpoint : IEndpoint<OrdersEndpointGroup>
+{
+    public void Map(RouteGroupBuilder group)
+    {
+        group.MapGet("/{id:guid}", (Guid id) =>
+        {
+            return TypedResults.Ok(new OrderResponse(id));
+        });
+    }
+}
+
+public sealed record OrderResponse(Guid Id);
+```
+
+## Result Mapping
+
+Successful results are mapped through the provided success factory.
+
+```csharp
+using Microsoft.AspNetCore.Http;
+
+using PANiXiDA.Core.Presentation.Http.Helpers;
+using PANiXiDA.Core.ResultPattern;
+
+public static IResult GetOrder(Guid id)
+{
+    Result<OrderResponse> result = Result.Success(new OrderResponse(id));
+
+    return result.ToHttpResult(value =>
+    {
+        return TypedResults.Ok(value);
+    });
+}
+```
+
+Failed results are mapped to `ProblemDetails` or `ValidationProblem`.
+
+```csharp
+using Microsoft.AspNetCore.Http;
+
+using PANiXiDA.Core.Presentation.Http.Helpers;
+using PANiXiDA.Core.ResultPattern;
+
+public static IResult CreateOrder()
+{
+    Result result = Result.Failure(Error.Validation("Email is required").WithField("Email"));
+
+    return result.ToHttpProblem();
+}
+```
+
+## HTTP Error Mapping
+
+| Error type | HTTP status | Title |
+| --- | ---: | --- |
+| `Validation` | 400 | `One or more validation errors occurred.` |
+| `NotFound` | 404 | `Resource not found` |
+| `Conflict` | 409 | `Conflict` |
+| `Unauthorized` | 401 | `Unauthorized` |
+| `Forbidden` | 403 | `Forbidden` |
+| `Failure` | 400 | `Request failed` |
+| `Unexpected` | 500 | `Server error` |
+
+Validation error fields are used as `ValidationProblem` keys. If a validation error has no field, the key is `general`.
+
+## OpenAPI
+
+In `Development`, `MapHttp` exposes:
+
+- OpenAPI document at `/openapi/v1.json`;
+- Swagger UI at `/swagger`.
+
+OpenAPI is not mapped automatically outside `Development`.
+
+## API Versioning
+
+The package configures URL segment API versioning:
+
+```text
+/api/v1/orders
+```
+
+The default API version is `1.0`, and the version must be present in the route.
 
 ## Project Structure
 
 ```text
-.
-├── src/
-│   └── <ProjectName>/
-├── tests/
-│   └── <ProjectName>.UnitTests/
-├── .editorconfig
-├── .gitattributes
-├── .gitignore
-├── Directory.Build.props
-├── Directory.Build.targets
-├── Directory.Packages.props
-├── global.json
-├── version.json
-├── LICENSE
-└── README.md
+src/
+  PANiXiDA.Core.Presentation.Http/
+    Configurations/
+    DependencyInjection/
+    Endpoints/
+    Helpers/
+    Middlewares/
+tests/
+  PANiXiDA.Core.Presentation.Http.UnitTests/
 ```
-
-### Main repository files
-
-* `src/` — source code
-* `tests/` — automated tests
-* `Directory.Build.props` — shared MSBuild settings
-* `Directory.Build.targets` — shared build / packaging settings
-* `Directory.Packages.props` — centralized package versions
-* `global.json` — SDK and tooling configuration
-* `version.json` — versioning configuration
-* `README.md` — package overview and usage documentation
 
 ## Development
 
-### Build
+Run the standard validation before publishing:
 
-```bash
-dotnet restore
-dotnet build --configuration Release
-```
-
-### Format
-
-```bash
-dotnet format
-```
-
-### Test
-
-```bash
-dotnet test --configuration Release
-```
-
-### Pack
-
-```bash
-dotnet pack --configuration Release
-```
-
-### Full local validation
-
-```bash
+```powershell
 dotnet restore
 dotnet format
 dotnet build --configuration Release
@@ -199,88 +240,25 @@ dotnet test --configuration Release
 dotnet pack --configuration Release
 ```
 
-### Tooling and conventions
+Run coverage:
 
-This repository uses:
-
-* .NET 10
-* Nullable enabled
-* Implicit usings enabled
-* Central package management
-* GitHub Actions
-* Nerdbank.GitVersioning
-
-Add more items only if they are actually relevant for the repository.
-
-## API / Contracts / Examples
-
-Describe the public API surface here.
-
-Suggested structure:
-
-* core abstractions;
-* main entry points;
-* key extension methods;
-* important behavioral notes;
-* typical integration examples.
-
-## Roadmap / TODO
-
-Potential future improvements:
-
-* item 1;
-* item 2;
-* item 3.
-
-Remove this section if it does not provide value.
-
-## Contributing
-
-Contributions are welcome.
-
-### General rules
-
-* keep the public API intentional;
-* avoid unnecessary dependencies;
-* preserve repository conventions;
-* do not introduce breaking changes without review;
-* keep documentation updated.
-
-### Code style
-
-* follow the repository `.editorconfig`;
-* prefer readable and explicit code;
-* keep naming consistent with the existing codebase.
-
-### Tests
-
-* add or update tests for meaningful behavior changes;
-* cover both success and failure scenarios where applicable;
-* add regression tests for bug fixes.
-
-### Validation before completion
-
-Run:
-
-```bash
-dotnet restore
-dotnet format
-dotnet build --configuration Release
-dotnet test --configuration Release
+```powershell
+dotnet test --configuration Release -- --coverage --coverage-output coverage.xml --coverage-output-format xml
 ```
+
+The source files under `src/PANiXiDA.Core.Presentation.Http` are covered by unit tests. Coverage excludes generated files under `obj/` from ASP.NET Core and validation source generators.
+
+## Package Contents
+
+The NuGet package includes:
+
+- compiled library for `net10.0`;
+- XML documentation;
+- README;
+- package icon;
+- Source Link metadata;
+- symbols package when packed with repository settings.
 
 ## License
 
-This project is licensed under the <LicenseName> license.
-
-See the [LICENSE](LICENSE) file for details.
-
-## Maintainers / Contacts
-
-Maintained by <Author / Team / Organization>.
-
-For questions or improvements, use:
-
-* GitHub Issues
-* Pull Requests
-* GitHub Discussions, if enabled
+This project is licensed under the Apache-2.0 license. See [LICENSE](LICENSE) for details.

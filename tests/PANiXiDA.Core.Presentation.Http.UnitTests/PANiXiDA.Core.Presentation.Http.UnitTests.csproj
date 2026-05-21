@@ -1,6 +1,7 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <OutputType>Exe</OutputType>
+        <TestingPlatformCommandLineArguments>$(TestingPlatformCommandLineArguments) --coverage-settings "$(MSBuildProjectDirectory)/CodeCoverage.config.xml"</TestingPlatformCommandLineArguments>
     </PropertyGroup>
 
     <ItemGroup>
@@ -11,7 +12,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\..\src\PANiXiDA.Core.Template\PANiXiDA.Core.Template.csproj" />
+        <ProjectReference Include="..\..\src\PANiXiDA.Core.Presentation.Http\PANiXiDA.Core.Presentation.Http.csproj" />
     </ItemGroup>
 
     <ItemGroup>
