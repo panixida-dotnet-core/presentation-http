@@ -246,7 +246,7 @@ Run coverage:
 dotnet test --configuration Release -- --coverage --coverage-output coverage.xml --coverage-output-format xml
 ```
 
-The source files under `src/PANiXiDA.Core.Presentation.Http` are covered by unit tests. Coverage reports may also include generated files under `obj/` from ASP.NET Core and validation source generators.
+The source files under `src/PANiXiDA.Core.Presentation.Http` are covered by unit tests. Coverage excludes generated files under `obj/` from ASP.NET Core and validation source generators.
 
 ## Package Contents
 

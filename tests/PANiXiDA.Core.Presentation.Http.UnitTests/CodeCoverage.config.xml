@@ -1,0 +1,9 @@
+<Configuration>
+    <CodeCoverage>
+        <Sources>
+            <Exclude>
+                <Source>.*[\\/]obj[\\/].*</Source>
+            </Exclude>
+        </Sources>
+    </CodeCoverage>
+</Configuration>
