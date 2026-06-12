@@ -53,8 +53,8 @@ public sealed class ServiceCollectionExtensionsTests
         result.Should().BeSameAs(services);
     }
 
-    [Fact(DisplayName = "MapHttp adds middleware and maps groups from the provided assemblies")]
-    public void MapHttp_ShouldReturnSameApplicationAndMapEndpointGroups()
+    [Fact(DisplayName = "UseHttp adds middleware and maps groups from the provided assemblies")]
+    public void UseHttp_ShouldReturnSameApplicationAndMapEndpointGroups()
     {
         EndpointMappingRecorder.Clear();
 
@@ -67,7 +67,7 @@ public sealed class ServiceCollectionExtensionsTests
 
         using var app = builder.Build();
 
-        var result = app.MapHttp(typeof(ADiscoveredEndpointGroup).Assembly);
+        var result = app.UseHttp(typeof(ADiscoveredEndpointGroup).Assembly);
 
         result.Should().BeSameAs(app);
         EndpointMappingRecorder.Entries.Should().Contain(nameof(ADiscoveredEndpointGroup));
