@@ -27,24 +27,68 @@ public sealed class EndpointMapBuilderTests
         summaryException.ParamName.ShouldBe("summary");
     }
 
-    [Fact(DisplayName = "MapPut maps the configured route, HTTP method, name, and summary")]
-    public void MapPut_ShouldMapConfiguredRouteHttpMethodNameAndSummary()
+    [Fact(DisplayName = "Constructor assigns properties")]
+    public void Constructor_ShouldAssignProperties()
     {
         var builder = WebApplication.CreateBuilder();
         using var app = builder.Build();
         var group = app.MapGroup("/users");
+
         var endpointMapBuilder = CreateEndpointMapBuilder(group);
 
-        var result = endpointMapBuilder.MapPut(static () => Results.NoContent());
+        endpointMapBuilder.Group.ShouldBeSameAs(group);
+        endpointMapBuilder.Route.ShouldBe("/{id:guid}");
+        endpointMapBuilder.Name.ShouldBe("UpdateUser");
+        endpointMapBuilder.Summary.ShouldBe("Updates a user.");
+    }
 
-        result.ShouldNotBeNull();
-        var endpoint = GetRouteEndpoint(app, "/users/{id:guid}");
-        var httpMethodMetadata = endpoint.Metadata.GetMetadata<IHttpMethodMetadata>();
+    [Fact(DisplayName = "MapGet maps the configured route, HTTP method, name, and summary")]
+    public void MapGet_ShouldMapConfiguredRouteHttpMethodNameAndSummary()
+    {
+        AssertMappedEndpoint(
+            static builder => builder.MapGet(static () => Results.Ok()),
+            "GET");
+    }
 
-        httpMethodMetadata.ShouldNotBeNull();
-        httpMethodMetadata.HttpMethods.ShouldBe(["PUT"]);
-        endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName.ShouldBe("UpdateUser");
-        endpoint.Metadata.GetMetadata<IEndpointSummaryMetadata>()?.Summary.ShouldBe("Updates a user.");
+    [Fact(DisplayName = "MapPost maps the configured route, HTTP method, name, and summary")]
+    public void MapPost_ShouldMapConfiguredRouteHttpMethodNameAndSummary()
+    {
+        AssertMappedEndpoint(
+            static builder => builder.MapPost(static () => Results.Created()),
+            "POST");
+    }
+
+    [Fact(DisplayName = "MapPut maps the configured route, HTTP method, name, and summary")]
+    public void MapPut_ShouldMapConfiguredRouteHttpMethodNameAndSummary()
+    {
+        AssertMappedEndpoint(
+            static builder => builder.MapPut(static () => Results.NoContent()),
+            "PUT");
+    }
+
+    [Fact(DisplayName = "MapPatch maps the configured route, HTTP method, name, and summary")]
+    public void MapPatch_ShouldMapConfiguredRouteHttpMethodNameAndSummary()
+    {
+        AssertMappedEndpoint(
+            static builder => builder.MapPatch(static () => Results.NoContent()),
+            "PATCH");
+    }
+
+    [Fact(DisplayName = "MapDelete maps the configured route, HTTP method, name, and summary")]
+    public void MapDelete_ShouldMapConfiguredRouteHttpMethodNameAndSummary()
+    {
+        AssertMappedEndpoint(
+            static builder => builder.MapDelete(static () => Results.NoContent()),
+            "DELETE");
+    }
+
+    [Fact(DisplayName = "MapMethods maps the configured route, HTTP methods, name, and summary")]
+    public void MapMethods_ShouldMapConfiguredRouteHttpMethodsNameAndSummary()
+    {
+        AssertMappedEndpoint(
+            static builder => builder.MapMethods(["HEAD", "OPTIONS"], static () => Results.Ok()),
+            "HEAD",
+            "OPTIONS");
     }
 
     [Fact(DisplayName = "MapPut validates handler")]
@@ -58,6 +102,27 @@ public sealed class EndpointMapBuilderTests
         var exception = Should.Throw<ArgumentNullException>(() => endpointMapBuilder.MapPut(null!));
 
         exception.ParamName.ShouldBe("handler");
+    }
+
+    private static void AssertMappedEndpoint(
+        Func<EndpointMapBuilder, RouteHandlerBuilder> mapEndpoint,
+        params string[] expectedHttpMethods)
+    {
+        var builder = WebApplication.CreateBuilder();
+        using var app = builder.Build();
+        var group = app.MapGroup("/users");
+        var endpointMapBuilder = CreateEndpointMapBuilder(group);
+
+        var result = mapEndpoint(endpointMapBuilder);
+
+        result.ShouldNotBeNull();
+        var endpoint = GetRouteEndpoint(app, "/users/{id:guid}");
+        var httpMethodMetadata = endpoint.Metadata.GetMetadata<IHttpMethodMetadata>();
+
+        httpMethodMetadata.ShouldNotBeNull();
+        httpMethodMetadata.HttpMethods.ShouldBe(expectedHttpMethods);
+        endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName.ShouldBe("UpdateUser");
+        endpoint.Metadata.GetMetadata<IEndpointSummaryMetadata>()?.Summary.ShouldBe("Updates a user.");
     }
 
     private static EndpointMapBuilder CreateEndpointMapBuilder(RouteGroupBuilder group)

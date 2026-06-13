@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.OpenApi;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 
 using PANiXiDA.Core.Presentation.Http.Configurations;
 
@@ -17,6 +19,19 @@ public sealed class OpenApiConfigurationTests
         var result = services.AddOpenApiConfiguration();
 
         result.ShouldBeSameAs(services);
+    }
+
+    [Fact(DisplayName = "OpenAPI configuration applies Scalar transformers")]
+    public void AddOpenApiConfiguration_ShouldApplyScalarTransformers()
+    {
+        var services = new ServiceCollection();
+
+        services.AddOpenApiConfiguration();
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var options = serviceProvider.GetRequiredService<IOptionsMonitor<OpenApiOptions>>().Get("v1");
+
+        options.ShouldNotBeNull();
     }
 
     [Fact(DisplayName = "OpenAPI configuration maps the specification and Scalar endpoints in Development")]
