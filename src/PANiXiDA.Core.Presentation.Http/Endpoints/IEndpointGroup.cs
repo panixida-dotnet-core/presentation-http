@@ -1,3 +1,5 @@
+using Asp.Versioning;
+
 using Microsoft.AspNetCore.Routing;
 
 namespace PANiXiDA.Core.Presentation.Http.Endpoints;
@@ -7,6 +9,21 @@ namespace PANiXiDA.Core.Presentation.Http.Endpoints;
 /// </summary>
 public interface IEndpointGroup
 {
+    /// <summary>
+    /// Gets the endpoint group route relative to the versioned API route prefix.
+    /// </summary>
+    string Route { get; }
+
+    /// <summary>
+    /// Gets the API resource name used for tags and version set metadata.
+    /// </summary>
+    string ResourceName { get; }
+
+    /// <summary>
+    /// Gets the endpoint group API version.
+    /// </summary>
+    ApiVersion ApiVersion { get; }
+
     /// <summary>
     /// Maps the endpoint group to the specified route builder.
     /// </summary>

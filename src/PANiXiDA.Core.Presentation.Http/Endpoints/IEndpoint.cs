@@ -1,5 +1,3 @@
-using Microsoft.AspNetCore.Routing;
-
 using System.Diagnostics.CodeAnalysis;
 
 namespace PANiXiDA.Core.Presentation.Http.Endpoints;
@@ -10,10 +8,25 @@ namespace PANiXiDA.Core.Presentation.Http.Endpoints;
 public interface IEndpoint
 {
     /// <summary>
-    /// Maps the endpoint to the specified route group.
+    /// Gets the endpoint route relative to the endpoint group route.
     /// </summary>
-    /// <param name="group">The route group to map the endpoint to.</param>
-    void Map(RouteGroupBuilder group);
+    string Route { get; }
+
+    /// <summary>
+    /// Gets the endpoint name used for route metadata and link generation.
+    /// </summary>
+    string Name { get; }
+
+    /// <summary>
+    /// Gets the endpoint summary used for OpenAPI metadata.
+    /// </summary>
+    string Summary { get; }
+
+    /// <summary>
+    /// Maps the endpoint to the specified endpoint map builder.
+    /// </summary>
+    /// <param name="builder">The endpoint map builder.</param>
+    void Map(EndpointMapBuilder builder);
 }
 
 /// <summary>

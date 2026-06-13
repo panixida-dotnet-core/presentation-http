@@ -16,11 +16,11 @@ public sealed class OpenApiConfigurationTests
 
         var result = services.AddOpenApiConfiguration();
 
-        result.Should().BeSameAs(services);
+        result.ShouldBeSameAs(services);
     }
 
-    [Fact(DisplayName = "OpenAPI configuration maps the specification endpoint in Development")]
-    public void UseOpenApiConfiguration_ShouldMapOpenApiEndpointInDevelopment()
+    [Fact(DisplayName = "OpenAPI configuration maps the specification and Scalar endpoints in Development")]
+    public void UseOpenApiConfiguration_ShouldMapOpenApiAndScalarEndpointsInDevelopment()
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
@@ -33,12 +33,15 @@ public sealed class OpenApiConfigurationTests
 
         var result = app.UseOpenApiConfiguration();
 
-        result.Should().BeSameAs(app);
-        GetRoutePatterns(app).Should().Contain("/openapi/{documentName}.json");
+        result.ShouldBeSameAs(app);
+        var routePatterns = GetRoutePatterns(app);
+
+        routePatterns.ShouldContain("/openapi/{documentName}.json");
+        routePatterns.ShouldContain("/scalar/{documentName?}");
     }
 
-    [Fact(DisplayName = "OpenAPI configuration does not map the specification endpoint outside Development")]
-    public void UseOpenApiConfiguration_ShouldNotMapOpenApiEndpointOutsideDevelopment()
+    [Fact(DisplayName = "OpenAPI configuration does not map the specification or Scalar endpoints outside Development")]
+    public void UseOpenApiConfiguration_ShouldNotMapOpenApiOrScalarEndpointsOutsideDevelopment()
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
@@ -49,8 +52,11 @@ public sealed class OpenApiConfigurationTests
 
         var result = app.UseOpenApiConfiguration();
 
-        result.Should().BeSameAs(app);
-        GetRoutePatterns(app).Should().NotContain("/openapi/{documentName}.json");
+        result.ShouldBeSameAs(app);
+        var routePatterns = GetRoutePatterns(app);
+
+        routePatterns.ShouldNotContain("/openapi/{documentName}.json");
+        routePatterns.ShouldNotContain("/scalar/{documentName?}");
     }
 
     private static List<string?> GetRoutePatterns(WebApplication app)

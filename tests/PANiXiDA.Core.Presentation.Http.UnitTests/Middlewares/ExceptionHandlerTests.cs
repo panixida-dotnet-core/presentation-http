@@ -33,20 +33,20 @@ public sealed class ExceptionHandlerTests
 
         var handled = await handler.TryHandleAsync(httpContext, exception, CancellationToken.None);
 
-        handled.Should().BeTrue();
-        httpContext.Response.StatusCode.Should().Be(StatusCodes.Status500InternalServerError);
+        handled.ShouldBeTrue();
+        httpContext.Response.StatusCode.ShouldBe(StatusCodes.Status500InternalServerError);
 
         using var document = ReadResponseBody(httpContext);
         var root = document.RootElement;
-        root.GetProperty("title").GetString().Should().Be("Internal server error");
-        root.GetProperty("status").GetInt32().Should().Be(StatusCodes.Status500InternalServerError);
-        root.GetProperty("detail").GetString().Should().Be("Development failure");
-        root.GetProperty("traceId").GetString().Should().Be(activity.Id);
-        root.GetProperty("activityTraceId").GetString().Should().Be(activity.TraceId.ToString());
+        root.GetProperty("title").GetString().ShouldBe("Internal server error");
+        root.GetProperty("status").GetInt32().ShouldBe(StatusCodes.Status500InternalServerError);
+        root.GetProperty("detail").GetString().ShouldBe("Development failure");
+        root.GetProperty("traceId").GetString().ShouldBe(activity.Id);
+        root.GetProperty("activityTraceId").GetString().ShouldBe(activity.TraceId.ToString());
 
-        var logEntry = logger.Entries.Should().ContainSingle().Subject;
-        logEntry.LogLevel.Should().Be(Microsoft.Extensions.Logging.LogLevel.Error);
-        logEntry.Exception.Should().BeSameAs(exception);
+        var logEntry = logger.Entries.ShouldHaveSingleItem();
+        logEntry.LogLevel.ShouldBe(Microsoft.Extensions.Logging.LogLevel.Error);
+        logEntry.Exception.ShouldBeSameAs(exception);
     }
 
     [Fact(DisplayName = "TryHandleAsync hides exception details outside Development")]
@@ -69,10 +69,10 @@ public sealed class ExceptionHandlerTests
             new InvalidOperationException("Production failure"),
             CancellationToken.None);
 
-        handled.Should().BeTrue();
+        handled.ShouldBeTrue();
 
         using var document = ReadResponseBody(httpContext);
-        document.RootElement.TryGetProperty("detail", out _).Should().BeFalse();
+        document.RootElement.TryGetProperty("detail", out _).ShouldBeFalse();
     }
 
     private static ServiceProvider CreateRequestServices()

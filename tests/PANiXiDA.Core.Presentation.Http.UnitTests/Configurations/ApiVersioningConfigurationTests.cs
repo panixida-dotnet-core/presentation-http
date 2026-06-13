@@ -17,7 +17,7 @@ public sealed class ApiVersioningConfigurationTests
 
         var result = services.AddApiVersioningConfiguration();
 
-        result.Should().BeSameAs(services);
+        result.ShouldBeSameAs(services);
 
         using var serviceProvider = services.BuildServiceProvider();
 
@@ -25,16 +25,16 @@ public sealed class ApiVersioningConfigurationTests
             .GetRequiredService<IOptions<ApiVersioningOptions>>()
             .Value;
 
-        apiVersioningOptions.DefaultApiVersion.Should().Be(new ApiVersion(1, 0));
-        apiVersioningOptions.AssumeDefaultVersionWhenUnspecified.Should().BeFalse();
-        apiVersioningOptions.ReportApiVersions.Should().BeTrue();
-        apiVersioningOptions.ApiVersionReader.Should().BeOfType<UrlSegmentApiVersionReader>();
+        apiVersioningOptions.DefaultApiVersion.ShouldBe(new ApiVersion(1, 0));
+        apiVersioningOptions.AssumeDefaultVersionWhenUnspecified.ShouldBeFalse();
+        apiVersioningOptions.ReportApiVersions.ShouldBeTrue();
+        apiVersioningOptions.ApiVersionReader.ShouldBeOfType<UrlSegmentApiVersionReader>();
 
         var apiExplorerOptions = serviceProvider
             .GetRequiredService<IOptions<ApiExplorerOptions>>()
             .Value;
 
-        apiExplorerOptions.GroupNameFormat.Should().Be("'v'V");
-        apiExplorerOptions.SubstituteApiVersionInUrl.Should().BeTrue();
+        apiExplorerOptions.GroupNameFormat.ShouldBe("'v'V");
+        apiExplorerOptions.SubstituteApiVersionInUrl.ShouldBeTrue();
     }
 }

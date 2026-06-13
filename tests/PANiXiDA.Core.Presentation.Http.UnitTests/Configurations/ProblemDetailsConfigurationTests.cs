@@ -26,7 +26,7 @@ public sealed class ProblemDetailsConfigurationTests
 
         options.CustomizeProblemDetails!(context);
 
-        context.ProblemDetails.Should().BeSameAs(problemDetails);
+        context.ProblemDetails.ShouldBeSameAs(problemDetails);
     }
 
     [Fact(DisplayName = "ProblemDetails configuration normalizes validation error keys to camelCase")]
@@ -56,18 +56,19 @@ public sealed class ProblemDetailsConfigurationTests
 
         options.CustomizeProblemDetails!(context);
 
-        var normalizedProblem = context.ProblemDetails.Should().BeOfType<HttpValidationProblemDetails>().Subject;
+        var normalizedProblem = context.ProblemDetails.ShouldBeOfType<HttpValidationProblemDetails>();
 
-        normalizedProblem.Errors.Should().ContainKey("userName");
-        normalizedProblem.Errors.Should().ContainKey("address.ZipCode");
-        normalizedProblem.Errors["userName"].Should().Equal("Required");
-        normalizedProblem.Errors["address.ZipCode"].Should().Equal("Invalid");
-        normalizedProblem.Title.Should().Be(validationProblem.Title);
-        normalizedProblem.Type.Should().Be(validationProblem.Type);
-        normalizedProblem.Status.Should().Be(validationProblem.Status);
-        normalizedProblem.Detail.Should().Be(validationProblem.Detail);
-        normalizedProblem.Instance.Should().Be(validationProblem.Instance);
-        normalizedProblem.Extensions.Should().ContainKey("code").WhoseValue.Should().Be("validation_failed");
+        normalizedProblem.Errors.ContainsKey("userName").ShouldBeTrue();
+        normalizedProblem.Errors.ContainsKey("address.ZipCode").ShouldBeTrue();
+        normalizedProblem.Errors["userName"].ShouldBe(["Required"]);
+        normalizedProblem.Errors["address.ZipCode"].ShouldBe(["Invalid"]);
+        normalizedProblem.Title.ShouldBe(validationProblem.Title);
+        normalizedProblem.Type.ShouldBe(validationProblem.Type);
+        normalizedProblem.Status.ShouldBe(validationProblem.Status);
+        normalizedProblem.Detail.ShouldBe(validationProblem.Detail);
+        normalizedProblem.Instance.ShouldBe(validationProblem.Instance);
+        normalizedProblem.Extensions.ContainsKey("code").ShouldBeTrue();
+        normalizedProblem.Extensions["code"].ShouldBe("validation_failed");
     }
 
     private static ProblemDetailsOptions CreateOptions()

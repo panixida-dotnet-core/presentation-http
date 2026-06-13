@@ -6,16 +6,16 @@ using PANiXiDA.Core.Presentation.Http.Endpoints;
 
 namespace PANiXiDA.Core.Presentation.Http.UnitTests.Endpoints.Fixtures.Groups;
 
-public sealed class OrderedEndpointGroup : IEndpointGroup
+internal sealed class InternalDiscoveredEndpointGroup : IEndpointGroup
 {
-    public string Route { get; } = "/ordered";
+    public string Route { get; } = "/internal";
 
-    public string ResourceName { get; } = "Ordered";
+    public string ResourceName { get; } = "Internal";
 
     public ApiVersion ApiVersion { get; } = new(1, 0);
 
     public void Map(IEndpointRouteBuilder endpoints)
     {
-        EndpointMapper.MapGroupEndpoints<OrderedEndpointGroup>(endpoints);
+        EndpointMappingRecorder.Add(nameof(InternalDiscoveredEndpointGroup));
     }
 }

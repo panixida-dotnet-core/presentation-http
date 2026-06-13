@@ -33,23 +33,23 @@ public sealed class LoggingMiddlewareTests
 
         await middleware.InvokeAsync(httpContext);
 
-        var logEntry = logger.Entries.Should().ContainSingle().Subject;
-        logEntry.LogLevel.Should().Be(expectedLogLevel);
-        logEntry.Message.Should().StartWith($"HTTP request finished with status code {statusCode}");
+        var logEntry = logger.Entries.ShouldHaveSingleItem();
+        logEntry.LogLevel.ShouldBe(expectedLogLevel);
+        logEntry.Message.ShouldStartWith($"HTTP request finished with status code {statusCode}");
 
-        var scope = logger.Scopes.Should().ContainSingle().Subject;
-        var scopeValues = scope.Should().BeAssignableTo<IReadOnlyDictionary<string, object?>>().Subject;
-        scopeValues["Transport"].Should().Be("http");
-        scopeValues["TraceIdentifier"].Should().Be(httpContext.TraceIdentifier);
-        scopeValues["TraceId"].Should().Be(activity.TraceId.ToString());
-        scopeValues["SpanId"].Should().Be(activity.SpanId.ToString());
-        scopeValues["Method"].Should().Be(HttpMethods.Post);
-        scopeValues["Path"].Should().Be("/orders");
-        scopeValues["Endpoint"].Should().Be("Test endpoint");
-        scopeValues["UserId"].Should().Be("user-id");
-        scopeValues["UserName"].Should().Be("user-name");
-        scopeValues["RemoteIp"].Should().Be("127.0.0.1");
-        scopeValues["UserAgent"].Should().Be("UnitTest");
+        var scope = logger.Scopes.ShouldHaveSingleItem();
+        var scopeValues = scope.ShouldBeAssignableTo<IReadOnlyDictionary<string, object?>>()!;
+        scopeValues["Transport"].ShouldBe("http");
+        scopeValues["TraceIdentifier"].ShouldBe(httpContext.TraceIdentifier);
+        scopeValues["TraceId"].ShouldBe(activity.TraceId.ToString());
+        scopeValues["SpanId"].ShouldBe(activity.SpanId.ToString());
+        scopeValues["Method"].ShouldBe(HttpMethods.Post);
+        scopeValues["Path"].ShouldBe("/orders");
+        scopeValues["Endpoint"].ShouldBe("Test endpoint");
+        scopeValues["UserId"].ShouldBe("user-id");
+        scopeValues["UserName"].ShouldBe("user-name");
+        scopeValues["RemoteIp"].ShouldBe("127.0.0.1");
+        scopeValues["UserAgent"].ShouldBe("UnitTest");
     }
 
     [Fact(DisplayName = "InvokeAsync logs request completion when the next middleware throws")]
@@ -68,8 +68,10 @@ public sealed class LoggingMiddlewareTests
 
         var act = async () => await middleware.InvokeAsync(httpContext);
 
-        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("Request failed");
-        logger.Entries.Should().ContainSingle().Which.LogLevel.Should().Be(LogLevel.Information);
+        var thrownException = await Should.ThrowAsync<InvalidOperationException>(act);
+
+        thrownException.Message.ShouldBe("Request failed");
+        logger.Entries.ShouldHaveSingleItem().LogLevel.ShouldBe(LogLevel.Information);
     }
 
     [Fact(DisplayName = "InvokeAsync supports requests without optional context")]
@@ -91,14 +93,14 @@ public sealed class LoggingMiddlewareTests
 
         await middleware.InvokeAsync(httpContext);
 
-        var scope = logger.Scopes.Should().ContainSingle().Subject;
-        var scopeValues = scope.Should().BeAssignableTo<IReadOnlyDictionary<string, object?>>().Subject;
-        scopeValues["TraceId"].Should().BeNull();
-        scopeValues["SpanId"].Should().BeNull();
-        scopeValues["Endpoint"].Should().BeNull();
-        scopeValues["UserId"].Should().BeNull();
-        scopeValues["UserName"].Should().BeNull();
-        scopeValues["RemoteIp"].Should().BeNull();
-        scopeValues["UserAgent"].Should().Be(string.Empty);
+        var scope = logger.Scopes.ShouldHaveSingleItem();
+        var scopeValues = scope.ShouldBeAssignableTo<IReadOnlyDictionary<string, object?>>()!;
+        scopeValues["TraceId"].ShouldBeNull();
+        scopeValues["SpanId"].ShouldBeNull();
+        scopeValues["Endpoint"].ShouldBeNull();
+        scopeValues["UserId"].ShouldBeNull();
+        scopeValues["UserName"].ShouldBeNull();
+        scopeValues["RemoteIp"].ShouldBeNull();
+        scopeValues["UserAgent"].ShouldBe(string.Empty);
     }
 }

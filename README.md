@@ -2,7 +2,7 @@
 
 `PANiXiDA.Core.Presentation.Http` is a reusable ASP.NET Core HTTP presentation package for PANiXiDA applications.
 
-It provides common Minimal API endpoint conventions, API versioning, OpenAPI setup, Problem Details handling, request logging, exception handling, forwarded headers configuration, and helpers for mapping `PANiXiDA.Core.ResultPattern` results to HTTP responses.
+It provides common Minimal API endpoint conventions, API versioning, OpenAPI setup, Problem Details handling, health checks, request logging, exception handling, forwarded headers configuration, and helpers for mapping `PANiXiDA.Core.ResultPattern` results to HTTP responses.
 
 ## Status
 
@@ -15,9 +15,10 @@ It provides common Minimal API endpoint conventions, API versioning, OpenAPI set
 ## Features
 
 - `AddHttp` registers the default HTTP presentation services.
-- `MapHttp` adds the default middleware pipeline and maps discovered endpoint groups.
-- `IEndpointGroup` defines route groups for Minimal API endpoints.
-- `IEndpoint<TGroup>` defines endpoints that belong to a specific group.
+- `UseHttp` adds the default middleware pipeline and maps discovered endpoint groups.
+- Health checks are registered by `AddHttp` and exposed at `/health` by `UseHttp`.
+- `IEndpointGroup` defines route, resource name, and API version metadata for Minimal API endpoint groups.
+- `IEndpoint<TGroup>` defines route, name, and summary metadata for endpoints that belong to a specific group.
 - `EndpointMapper` discovers and maps endpoints in a deterministic type-name order.
 - `EndpointConstants.EndpointPrefix` defines `/api/v{version:apiVersion}`.
 - `ResultHttpMapper` maps `Result` and `Result<T>` to `IResult`.
@@ -31,7 +32,7 @@ It provides common Minimal API endpoint conventions, API versioning, OpenAPI set
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="PANiXiDA.Core.Presentation.Http" Version="1.0.0" />
+  <PackageReference Include="PANiXiDA.Core.Presentation.Http" Version="2.0.0-preview" />
 </ItemGroup>
 ```
 
@@ -46,7 +47,7 @@ builder.Services.AddHttp(builder.Configuration.GetSection("ForwardedHeaders"));
 
 var app = builder.Build();
 
-app.MapHttp(typeof(Program).Assembly);
+app.UseHttp(typeof(Program).Assembly);
 
 app.Run();
 ```
@@ -96,24 +97,45 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 });
 ```
 
-## Endpoint Groups
+## Health Checks
 
-An endpoint group owns a route prefix, tags, and the call to map endpoints that belong to the group.
+`AddHttp` registers ASP.NET Core health check services, and `UseHttp` maps the health check endpoint at `/health`.
+
+```text
+GET /health
+```
+
+Services can add their own checks after `AddHttp`.
 
 ```csharp
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+
+builder.Services.AddHealthChecks()
+    .AddCheck("self", () => HealthCheckResult.Healthy());
+```
+
+## Endpoint Groups
+
+An endpoint group owns a route prefix, resource name, API version, and the call to map endpoints that belong to the group.
+
+```csharp
+using Asp.Versioning;
+
 using Microsoft.AspNetCore.Routing;
 
 using PANiXiDA.Core.Presentation.Http.Endpoints;
 
 public sealed class OrdersEndpointGroup : IEndpointGroup
 {
+    public string Route { get; } = "/orders";
+
+    public string ResourceName { get; } = "Orders";
+
+    public ApiVersion ApiVersion { get; } = new(1, 0);
+
     public void Map(IEndpointRouteBuilder endpoints)
     {
-        var group = endpoints.MapGroup(EndpointConstants.EndpointPrefix)
-            .MapGroup("/orders")
-            .WithTags("Orders");
-
-        EndpointMapper.MapGroupEndpoints<OrdersEndpointGroup>(group, endpoints.ServiceProvider);
+        EndpointMapper.MapGroupEndpoints<OrdersEndpointGroup>(endpoints);
     }
 }
 ```
@@ -123,21 +145,27 @@ The final route prefix is `/api/v{version}/orders`.
 ## Endpoints
 
 An endpoint implements `IEndpoint<TGroup>`, where `TGroup` is the endpoint group it belongs to.
+Endpoint metadata is declared as public properties so it can be required by the interface and applied by `EndpointMapper`.
 
 ```csharp
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Routing;
 
 using PANiXiDA.Core.Presentation.Http.Endpoints;
 
 public sealed class GetOrderEndpoint : IEndpoint<OrdersEndpointGroup>
 {
-    public void Map(RouteGroupBuilder group)
+    public string Route { get; } = "/{id:guid}";
+
+    public string Name { get; } = "GetOrder";
+
+    public string Summary { get; } = "Gets an order by identifier.";
+
+    public void Map(EndpointMapBuilder builder)
     {
-        group.MapGet("/{id:guid}", (Guid id) =>
-        {
-            return TypedResults.Ok(new OrderResponse(id));
-        });
+        builder.MapGet((Guid id) =>
+            {
+                return TypedResults.Ok(new OrderResponse(id));
+            });
     }
 }
 
@@ -183,6 +211,9 @@ public static IResult CreateOrder()
 
 ## HTTP Error Mapping
 
+Unhandled exceptions are mapped to `ProblemDetails` in every environment.
+In `Development`, the response includes the exception message in `detail`.
+
 | Error type | HTTP status | Title |
 | --- | ---: | --- |
 | `Validation` | 400 | `One or more validation errors occurred.` |
@@ -197,10 +228,12 @@ Validation error fields are used as `ValidationProblem` keys. If a validation er
 
 ## OpenAPI
 
-In `Development`, `MapHttp` exposes:
+In `Development`, `UseHttp` exposes:
 
 - OpenAPI document at `/openapi/v1.json`;
-- Swagger UI at `/swagger`.
+- Scalar API reference at `/scalar`.
+
+OpenAPI registration also enables Scalar transformers for Scalar-specific document extensions.
 
 OpenAPI is not mapped automatically outside `Development`.
 

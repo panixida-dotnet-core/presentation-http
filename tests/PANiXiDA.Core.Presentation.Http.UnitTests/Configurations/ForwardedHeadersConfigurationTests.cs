@@ -20,13 +20,13 @@ public sealed class ForwardedHeadersConfigurationTests
 
         var options = CreateOptions(services);
 
-        result.Should().BeSameAs(services);
-        options.ForwardedHeaders.Should().Be(
+        result.ShouldBeSameAs(services);
+        options.ForwardedHeaders.ShouldBe(
             ForwardedHeaders.XForwardedFor |
             ForwardedHeaders.XForwardedHost |
             ForwardedHeaders.XForwardedProto);
-        options.KnownIPNetworks.Should().HaveCount(defaultOptions.KnownIPNetworks.Count);
-        options.KnownProxies.Should().HaveCount(defaultOptions.KnownProxies.Count);
+        options.KnownIPNetworks.Count.ShouldBe(defaultOptions.KnownIPNetworks.Count);
+        options.KnownProxies.Count.ShouldBe(defaultOptions.KnownProxies.Count);
     }
 
     [Fact(DisplayName = "ForwardedHeaders configuration binds standard options from configuration")]
@@ -45,10 +45,10 @@ public sealed class ForwardedHeadersConfigurationTests
 
         var options = CreateOptions(services);
 
-        options.ForwardedHeaders.Should().Be(ForwardedHeaders.XForwardedFor);
-        options.ForwardLimit.Should().Be(2);
-        options.RequireHeaderSymmetry.Should().BeTrue();
-        options.AllowedHosts.Should().Equal("api.example.test");
+        options.ForwardedHeaders.ShouldBe(ForwardedHeaders.XForwardedFor);
+        options.ForwardLimit.ShouldBe(2);
+        options.RequireHeaderSymmetry.ShouldBeTrue();
+        options.AllowedHosts.ShouldBe(["api.example.test"]);
     }
 
     [Fact(DisplayName = "ForwardedHeaders configuration accepts a custom section")]
@@ -65,8 +65,8 @@ public sealed class ForwardedHeadersConfigurationTests
 
         var options = CreateOptions(services);
 
-        options.ForwardedHeaders.Should().Be(ForwardedHeaders.XForwardedHost);
-        options.ForwardLimit.Should().Be(5);
+        options.ForwardedHeaders.ShouldBe(ForwardedHeaders.XForwardedHost);
+        options.ForwardLimit.ShouldBe(5);
     }
 
     private static ForwardedHeadersOptions CreateOptions(IServiceCollection services)

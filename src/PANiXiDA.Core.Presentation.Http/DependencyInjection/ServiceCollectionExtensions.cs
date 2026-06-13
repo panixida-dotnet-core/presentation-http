@@ -16,7 +16,7 @@ namespace PANiXiDA.Core.Presentation.Http.DependencyInjection;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers the default HTTP presentation services, including API versioning, OpenAPI, Problem Details, exception handling, validation, and forwarded headers.
+    /// Registers the default HTTP presentation services, including API versioning, OpenAPI, Problem Details, exception handling, validation, health checks, and forwarded headers.
     /// </summary>
     /// <param name="services">The application service collection.</param>
     /// <param name="configuration">The forwarded headers configuration section, or <see langword="null"/> to use defaults.</param>
@@ -31,6 +31,7 @@ public static class ServiceCollectionExtensions
         services.AddProblemDetailsConfiguration();
         services.AddExceptionHandler<ExceptionHandler>();
         services.AddValidation();
+        services.AddHealthChecks();
 
         return services;
     }
@@ -48,6 +49,7 @@ public static class ServiceCollectionExtensions
         app.UseHttpsRedirection();
         app.UseMiddleware<LoggingMiddleware>();
         app.UseOpenApiConfiguration();
+        app.MapHealthChecks("/health");
 
         foreach (var assembly in assemblies)
         {

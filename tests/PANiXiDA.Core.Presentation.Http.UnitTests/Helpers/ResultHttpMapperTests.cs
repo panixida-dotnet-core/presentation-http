@@ -16,7 +16,7 @@ public sealed class ResultHttpMapperTests
 
         var httpResult = result.ToHttpResult(() => expected);
 
-        httpResult.Should().BeSameAs(expected);
+        httpResult.ShouldBeSameAs(expected);
     }
 
     [Fact(DisplayName = "ToHttpResult returns ProblemDetails for a failed Result")]
@@ -32,11 +32,11 @@ public sealed class ResultHttpMapperTests
             return TypedResults.Ok();
         });
 
-        successInvoked.Should().BeFalse();
+        successInvoked.ShouldBeFalse();
 
         var problemDetails = AssertProblem(httpResult, StatusCodes.Status404NotFound);
-        problemDetails.Title.Should().Be("Resource not found");
-        problemDetails.Detail.Should().Be("Order not found");
+        problemDetails.Title.ShouldBe("Resource not found");
+        problemDetails.Detail.ShouldBe("Order not found");
     }
 
     [Fact(DisplayName = "ToHttpResult passes the value to the factory for a successful generic Result")]
@@ -53,8 +53,8 @@ public sealed class ResultHttpMapperTests
             return expected;
         });
 
-        httpResult.Should().BeSameAs(expected);
-        receivedValue.Should().Be("source");
+        httpResult.ShouldBeSameAs(expected);
+        receivedValue.ShouldBe("source");
     }
 
     [Fact(DisplayName = "ToHttpResult returns ProblemDetails for a failed generic Result")]
@@ -70,11 +70,11 @@ public sealed class ResultHttpMapperTests
             return TypedResults.Ok(value);
         });
 
-        successInvoked.Should().BeFalse();
+        successInvoked.ShouldBeFalse();
 
         var problemDetails = AssertProblem(httpResult, StatusCodes.Status409Conflict);
-        problemDetails.Title.Should().Be("Conflict");
-        problemDetails.Detail.Should().Be("Order already exists");
+        problemDetails.Title.ShouldBe("Conflict");
+        problemDetails.Detail.ShouldBe("Order already exists");
     }
 
     [Theory(DisplayName = "ToHttpProblem returns the expected status code and title")]
@@ -91,8 +91,8 @@ public sealed class ResultHttpMapperTests
         var httpResult = result.ToHttpProblem();
 
         var problemDetails = AssertProblem(httpResult, expectedStatusCode);
-        problemDetails.Title.Should().Be(expectedTitle);
-        problemDetails.Detail.Should().Be(message);
+        problemDetails.Title.ShouldBe(expectedTitle);
+        problemDetails.Detail.ShouldBe(message);
     }
 
     [Fact(DisplayName = "ToHttpProblem returns ProblemDetails for a generic Result")]
@@ -103,8 +103,8 @@ public sealed class ResultHttpMapperTests
         var httpResult = result.ToHttpProblem();
 
         var problemDetails = AssertProblem(httpResult, StatusCodes.Status401Unauthorized);
-        problemDetails.Title.Should().Be("Unauthorized");
-        problemDetails.Detail.Should().Be("Authentication required");
+        problemDetails.Title.ShouldBe("Unauthorized");
+        problemDetails.Detail.ShouldBe("Authentication required");
     }
 
     [Fact(DisplayName = "ToHttpProblem groups validation errors by field")]
@@ -123,10 +123,10 @@ public sealed class ResultHttpMapperTests
         var httpResult = result.ToHttpProblem();
 
         var problemDetails = AssertValidationProblem(httpResult);
-        problemDetails.Title.Should().Be("One or more validation errors occurred.");
-        problemDetails.Errors["email"].Should().Equal("Required");
-        problemDetails.Errors["password"].Should().Equal("Too short");
-        problemDetails.Errors["general"].Should().Equal("General error", "Blank field", "Wrong metadata");
+        problemDetails.Title.ShouldBe("One or more validation errors occurred.");
+        problemDetails.Errors["email"].ShouldBe(["Required"]);
+        problemDetails.Errors["password"].ShouldBe(["Too short"]);
+        problemDetails.Errors["general"].ShouldBe(["General error", "Blank field", "Wrong metadata"]);
     }
 
     public static TheoryData<ErrorType, string, int, string> GetProblemCases()
@@ -159,29 +159,23 @@ public sealed class ResultHttpMapperTests
 
     private static ProblemDetails AssertProblem(IResult httpResult, int expectedStatusCode)
     {
-        httpResult.Should()
-            .BeAssignableTo<IStatusCodeHttpResult>()
-            .Which.StatusCode.Should()
-            .Be(expectedStatusCode);
+        httpResult.ShouldBeAssignableTo<IStatusCodeHttpResult>()
+            .StatusCode.ShouldBe(expectedStatusCode);
 
-        var valueResult = httpResult.Should()
-            .BeAssignableTo<IValueHttpResult<ProblemDetails>>()
-            .Subject;
+        var valueResult = httpResult.ShouldBeAssignableTo<IValueHttpResult<ProblemDetails>>();
 
-        return valueResult.Value.Should().NotBeNull().And.BeOfType<ProblemDetails>().Subject;
+        return valueResult.Value.ShouldNotBeNull()
+            .ShouldBeOfType<ProblemDetails>();
     }
 
     private static HttpValidationProblemDetails AssertValidationProblem(IResult httpResult)
     {
-        httpResult.Should()
-            .BeAssignableTo<IStatusCodeHttpResult>()
-            .Which.StatusCode.Should()
-            .Be(StatusCodes.Status400BadRequest);
+        httpResult.ShouldBeAssignableTo<IStatusCodeHttpResult>()
+            .StatusCode.ShouldBe(StatusCodes.Status400BadRequest);
 
-        var valueResult = httpResult.Should()
-            .BeAssignableTo<IValueHttpResult<HttpValidationProblemDetails>>()
-            .Subject;
+        var valueResult = httpResult.ShouldBeAssignableTo<IValueHttpResult<HttpValidationProblemDetails>>();
 
-        return valueResult.Value.Should().NotBeNull().And.BeOfType<HttpValidationProblemDetails>().Subject;
+        return valueResult.Value.ShouldNotBeNull()
+            .ShouldBeOfType<HttpValidationProblemDetails>();
     }
 }
