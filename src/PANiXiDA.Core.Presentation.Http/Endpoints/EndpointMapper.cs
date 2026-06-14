@@ -25,7 +25,7 @@ public static class EndpointMapper
 
         var endpointGroup = ActivatorUtilities.CreateInstance<TGroup>(endpoints.ServiceProvider);
         var apiVersion = endpointGroup.ApiVersion;
-        var apiVersionSet = endpoints.NewApiVersionSet(endpointGroup.ResourceName)
+        var apiVersionSet = endpoints.NewApiVersionSet(endpointGroup.Name)
             .HasApiVersion(apiVersion)
             .ReportApiVersions()
             .Build();
@@ -33,7 +33,7 @@ public static class EndpointMapper
         var group = endpoints.MapGroup(EndpointConstants.EndpointPrefix)
             .MapGroup(endpointGroup.Route);
 
-        group.WithTags(endpointGroup.ResourceName);
+        group.WithTags(endpointGroup.Name);
         group.WithApiVersionSet(apiVersionSet);
         group.MapToApiVersion(apiVersion);
 

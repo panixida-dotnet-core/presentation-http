@@ -129,7 +129,7 @@ public sealed class OrdersEndpointGroup : IEndpointGroup
 {
     public string Route { get; } = "/orders";
 
-    public string ResourceName { get; } = "Orders";
+    public string Name { get; } = "Orders";
 
     public ApiVersion ApiVersion { get; } = new(1, 0);
 

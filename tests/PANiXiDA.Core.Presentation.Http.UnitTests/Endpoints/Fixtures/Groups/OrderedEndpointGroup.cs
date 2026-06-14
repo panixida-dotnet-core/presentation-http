@@ -10,7 +10,7 @@ public sealed class OrderedEndpointGroup : IEndpointGroup
 {
     public string Route { get; } = "/ordered";
 
-    public string ResourceName { get; } = "Ordered";
+    public string Name { get; } = "Ordered";
 
     public ApiVersion ApiVersion { get; } = new(1, 0);
 

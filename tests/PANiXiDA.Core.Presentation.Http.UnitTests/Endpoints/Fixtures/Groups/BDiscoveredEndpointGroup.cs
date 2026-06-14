@@ -10,7 +10,7 @@ public sealed class BDiscoveredEndpointGroup : IEndpointGroup
 {
     public string Route { get; } = "/b";
 
-    public string ResourceName { get; } = "B";
+    public string Name { get; } = "B";
 
     public ApiVersion ApiVersion { get; } = new(1, 0);
 

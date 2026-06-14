@@ -10,7 +10,7 @@ internal sealed class InternalDiscoveredEndpointGroup : IEndpointGroup
 {
     public string Route { get; } = "/internal";
 
-    public string ResourceName { get; } = "Internal";
+    public string Name { get; } = "Internal";
 
     public ApiVersion ApiVersion { get; } = new(1, 0);
 

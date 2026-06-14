@@ -17,7 +17,7 @@ public interface IEndpointGroup
     /// <summary>
     /// Gets the API resource name used for tags and version set metadata.
     /// </summary>
-    string ResourceName { get; }
+    string Name { get; }
 
     /// <summary>
     /// Gets the endpoint group API version.

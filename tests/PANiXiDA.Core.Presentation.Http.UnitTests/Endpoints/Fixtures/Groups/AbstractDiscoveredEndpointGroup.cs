@@ -10,7 +10,7 @@ public abstract class AbstractDiscoveredEndpointGroup : IEndpointGroup
 {
     public string Route { get; } = "/abstract";
 
-    public string ResourceName { get; } = "Abstract";
+    public string Name { get; } = "Abstract";
 
     public ApiVersion ApiVersion { get; } = new(1, 0);
 

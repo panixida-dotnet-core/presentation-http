@@ -10,7 +10,7 @@ public sealed class OtherEndpointGroup : IEndpointGroup
 {
     public string Route { get; } = "/other";
 
-    public string ResourceName { get; } = "Other";
+    public string Name { get; } = "Other";
 
     public ApiVersion ApiVersion { get; } = new(1, 0);
 
