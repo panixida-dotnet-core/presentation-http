@@ -51,6 +51,26 @@ public sealed class ForwardedHeadersConfigurationTests
         options.AllowedHosts.ShouldBe(["api.example.test"]);
     }
 
+    [Fact(DisplayName = "ForwardedHeaders configuration binds standard section from root configuration")]
+    public void AddForwardedHeadersConfiguration_ShouldBindStandardSectionFromRootConfiguration()
+    {
+        var services = new ServiceCollection();
+        var configuration = CreateConfiguration(new Dictionary<string, string?>
+        {
+            ["ForwardedHeaders:ForwardedHeaders"] = nameof(ForwardedHeaders.XForwardedProto),
+            ["ForwardedHeaders:ForwardLimit"] = "3",
+            ["ForwardedHeaders:AllowedHosts:0"] = "api.example.test"
+        });
+
+        services.AddForwardedHeadersConfiguration(configuration);
+
+        var options = CreateOptions(services);
+
+        options.ForwardedHeaders.ShouldBe(ForwardedHeaders.XForwardedProto);
+        options.ForwardLimit.ShouldBe(3);
+        options.AllowedHosts.ShouldBe(["api.example.test"]);
+    }
+
     [Fact(DisplayName = "ForwardedHeaders configuration accepts a custom section")]
     public void AddForwardedHeadersConfiguration_ShouldBindStandardOptionsFromCustomSection()
     {

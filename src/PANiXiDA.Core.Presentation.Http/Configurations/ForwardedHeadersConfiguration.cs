@@ -7,6 +7,8 @@ namespace PANiXiDA.Core.Presentation.Http.Configurations;
 
 internal static class ForwardedHeadersConfiguration
 {
+    private const string SectionName = "ForwardedHeaders";
+
     internal static IServiceCollection AddForwardedHeadersConfiguration(
         this IServiceCollection services,
         IConfiguration? configuration)
@@ -21,7 +23,7 @@ internal static class ForwardedHeadersConfiguration
 
         if (configuration is not null)
         {
-            services.Configure<ForwardedHeadersOptions>(configuration);
+            services.Configure<ForwardedHeadersOptions>(ResolveConfiguration(configuration));
         }
 
         return services;
@@ -32,5 +34,17 @@ internal static class ForwardedHeadersConfiguration
         app.UseForwardedHeaders();
 
         return app;
+    }
+
+    private static IConfiguration ResolveConfiguration(IConfiguration configuration)
+    {
+        IConfigurationSection forwardedHeadersSection = configuration.GetSection(SectionName);
+
+        if (forwardedHeadersSection.GetChildren().Any())
+        {
+            return forwardedHeadersSection;
+        }
+
+        return configuration;
     }
 }

@@ -43,7 +43,7 @@ using PANiXiDA.Core.Presentation.Http.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddHttp(builder.Configuration.GetSection("ForwardedHeaders"));
+builder.Services.AddHttp(builder.Configuration);
 
 var app = builder.Build();
 
@@ -68,7 +68,7 @@ ForwardedHeaders.XForwardedHost |
 ForwardedHeaders.XForwardedProto
 ```
 
-Additional values can be bound from the standard ASP.NET Core `ForwardedHeadersOptions` model by passing a configuration section to `AddHttp`.
+Additional values can be bound from the standard ASP.NET Core `ForwardedHeadersOptions` model by adding a `ForwardedHeaders` section to the application configuration.
 
 ```json
 {
@@ -88,7 +88,7 @@ For advanced scenarios, configure `ForwardedHeadersOptions` directly after `AddH
 ```csharp
 using Microsoft.AspNetCore.HttpOverrides;
 
-builder.Services.AddHttp(builder.Configuration.GetSection("ForwardedHeaders"));
+builder.Services.AddHttp(builder.Configuration);
 
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {

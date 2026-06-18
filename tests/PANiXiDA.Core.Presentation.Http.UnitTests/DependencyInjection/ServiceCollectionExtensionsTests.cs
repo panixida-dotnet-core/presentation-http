@@ -48,6 +48,25 @@ public sealed class ServiceCollectionExtensionsTests
         options.ForwardLimit.ShouldBe(4);
     }
 
+    [Fact(DisplayName = "AddHttp applies ForwardedHeaders section from root configuration")]
+    public void AddHttp_ShouldApplyForwardedHeadersSectionFromRootConfiguration()
+    {
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ForwardedHeaders:" + nameof(ForwardedHeadersOptions.ForwardLimit)] = "6"
+            })
+            .Build();
+
+        services.AddHttp(configuration);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var options = serviceProvider.GetRequiredService<IOptions<ForwardedHeadersOptions>>().Value;
+
+        options.ForwardLimit.ShouldBe(6);
+    }
+
     [Fact(DisplayName = "AddHttp registers health check services")]
     public void AddHttp_ShouldRegisterHealthCheckServices()
     {
