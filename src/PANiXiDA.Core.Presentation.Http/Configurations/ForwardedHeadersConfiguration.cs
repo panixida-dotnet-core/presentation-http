@@ -19,6 +19,8 @@ internal static class ForwardedHeadersConfiguration
                 ForwardedHeaders.XForwardedFor |
                 ForwardedHeaders.XForwardedHost |
                 ForwardedHeaders.XForwardedProto;
+            options.KnownIPNetworks.Clear();
+            options.KnownProxies.Clear();
         });
 
         if (configuration is not null)

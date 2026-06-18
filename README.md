@@ -68,6 +68,8 @@ ForwardedHeaders.XForwardedHost |
 ForwardedHeaders.XForwardedProto
 ```
 
+The package also clears the default loopback-only `KnownIPNetworks` and `KnownProxies` restrictions so applications behind Kubernetes ingress or Gateway API proxies can process forwarded headers without per-service proxy registration.
+
 Additional values can be bound from the standard ASP.NET Core `ForwardedHeadersOptions` model by adding a `ForwardedHeaders` section to the application configuration.
 
 ```json
@@ -83,17 +85,17 @@ Additional values can be bound from the standard ASP.NET Core `ForwardedHeadersO
 }
 ```
 
-For advanced scenarios, configure `ForwardedHeadersOptions` directly after `AddHttp`.
+For stricter trust boundaries, configure `ForwardedHeadersOptions` directly after `AddHttp`.
 
 ```csharp
 using Microsoft.AspNetCore.HttpOverrides;
+using System.Net;
 
 builder.Services.AddHttp(builder.Configuration);
 
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
-    options.KnownProxies.Clear();
-    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Add(IPAddress.Parse("10.0.0.10"));
 });
 ```
 

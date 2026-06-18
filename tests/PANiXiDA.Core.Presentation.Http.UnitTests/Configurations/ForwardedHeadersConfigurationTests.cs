@@ -14,7 +14,6 @@ public sealed class ForwardedHeadersConfigurationTests
     public void AddForwardedHeadersConfiguration_ShouldUseDefaultHeaders()
     {
         var services = new ServiceCollection();
-        var defaultOptions = new ForwardedHeadersOptions();
 
         var result = services.AddForwardedHeadersConfiguration(configuration: null);
 
@@ -25,8 +24,8 @@ public sealed class ForwardedHeadersConfigurationTests
             ForwardedHeaders.XForwardedFor |
             ForwardedHeaders.XForwardedHost |
             ForwardedHeaders.XForwardedProto);
-        options.KnownIPNetworks.Count.ShouldBe(defaultOptions.KnownIPNetworks.Count);
-        options.KnownProxies.Count.ShouldBe(defaultOptions.KnownProxies.Count);
+        options.KnownIPNetworks.ShouldBeEmpty();
+        options.KnownProxies.ShouldBeEmpty();
     }
 
     [Fact(DisplayName = "ForwardedHeaders configuration binds standard options from configuration")]
