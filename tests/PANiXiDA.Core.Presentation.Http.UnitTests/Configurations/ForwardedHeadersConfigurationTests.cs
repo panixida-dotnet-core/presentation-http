@@ -14,7 +14,6 @@ public sealed class ForwardedHeadersConfigurationTests
     public void AddForwardedHeadersConfiguration_ShouldUseDefaultHeaders()
     {
         var services = new ServiceCollection();
-        var defaultOptions = new ForwardedHeadersOptions();
 
         var result = services.AddForwardedHeadersConfiguration(configuration: null);
 
@@ -25,8 +24,8 @@ public sealed class ForwardedHeadersConfigurationTests
             ForwardedHeaders.XForwardedFor |
             ForwardedHeaders.XForwardedHost |
             ForwardedHeaders.XForwardedProto);
-        options.KnownIPNetworks.Count.ShouldBe(defaultOptions.KnownIPNetworks.Count);
-        options.KnownProxies.Count.ShouldBe(defaultOptions.KnownProxies.Count);
+        options.KnownIPNetworks.ShouldBeEmpty();
+        options.KnownProxies.ShouldBeEmpty();
     }
 
     [Fact(DisplayName = "ForwardedHeaders configuration binds standard options from configuration")]
@@ -48,6 +47,26 @@ public sealed class ForwardedHeadersConfigurationTests
         options.ForwardedHeaders.ShouldBe(ForwardedHeaders.XForwardedFor);
         options.ForwardLimit.ShouldBe(2);
         options.RequireHeaderSymmetry.ShouldBeTrue();
+        options.AllowedHosts.ShouldBe(["api.example.test"]);
+    }
+
+    [Fact(DisplayName = "ForwardedHeaders configuration binds standard section from root configuration")]
+    public void AddForwardedHeadersConfiguration_ShouldBindStandardSectionFromRootConfiguration()
+    {
+        var services = new ServiceCollection();
+        var configuration = CreateConfiguration(new Dictionary<string, string?>
+        {
+            ["ForwardedHeaders:ForwardedHeaders"] = nameof(ForwardedHeaders.XForwardedProto),
+            ["ForwardedHeaders:ForwardLimit"] = "3",
+            ["ForwardedHeaders:AllowedHosts:0"] = "api.example.test"
+        });
+
+        services.AddForwardedHeadersConfiguration(configuration);
+
+        var options = CreateOptions(services);
+
+        options.ForwardedHeaders.ShouldBe(ForwardedHeaders.XForwardedProto);
+        options.ForwardLimit.ShouldBe(3);
         options.AllowedHosts.ShouldBe(["api.example.test"]);
     }
 
