@@ -4,8 +4,6 @@ using Microsoft.Extensions.Logging;
 using PANiXiDA.Core.Presentation.Http.Middlewares;
 using PANiXiDA.Core.Presentation.Http.UnitTests.Support;
 
-using System.Diagnostics;
-
 namespace PANiXiDA.Core.Presentation.Http.UnitTests.Middlewares;
 
 public sealed class LoggingMiddlewareTests
@@ -18,8 +16,6 @@ public sealed class LoggingMiddlewareTests
         int statusCode,
         LogLevel expectedLogLevel)
     {
-        using var activity = new Activity("http-request").Start();
-
         var logger = new TestLogger<LoggingMiddleware>();
         var httpContext = TestHttpContextFactory.CreateHttpContext();
         Task next(HttpContext context)
@@ -35,21 +31,26 @@ public sealed class LoggingMiddlewareTests
 
         var logEntry = logger.Entries.ShouldHaveSingleItem();
         logEntry.LogLevel.ShouldBe(expectedLogLevel);
-        logEntry.Message.ShouldStartWith($"HTTP request finished with status code {statusCode}");
+        logEntry.Message.ShouldBe("HTTP request finished");
 
-        var scope = logger.Scopes.ShouldHaveSingleItem();
-        var scopeValues = scope.ShouldBeAssignableTo<IReadOnlyDictionary<string, object?>>()!;
-        scopeValues["Transport"].ShouldBe("http");
-        scopeValues["TraceIdentifier"].ShouldBe(httpContext.TraceIdentifier);
-        scopeValues["TraceId"].ShouldBe(activity.TraceId.ToString());
-        scopeValues["SpanId"].ShouldBe(activity.SpanId.ToString());
-        scopeValues["Method"].ShouldBe(HttpMethods.Post);
-        scopeValues["Path"].ShouldBe("/orders");
-        scopeValues["Endpoint"].ShouldBe("Test endpoint");
-        scopeValues["UserId"].ShouldBe("user-id");
-        scopeValues["UserName"].ShouldBe("user-name");
-        scopeValues["RemoteIp"].ShouldBe("127.0.0.1");
-        scopeValues["UserAgent"].ShouldBe("UnitTest");
+        var requestScope = FindScope(logger, "http.request.method");
+        var responseScope = FindScope(logger, "http.response.status_code");
+
+        var scopeValues = requestScope;
+        scopeValues["network.protocol.name"].ShouldBe("http");
+        scopeValues["http.request.method"].ShouldBe(HttpMethods.Post);
+        scopeValues["url.path"].ShouldBe("/orders");
+        scopeValues["http.route"].ShouldBe("/orders");
+        scopeValues["aspnetcore.endpoint.display_name"].ShouldBe("Test endpoint");
+        scopeValues["enduser.id"].ShouldBe("user-id");
+        scopeValues["client.address"].ShouldBe("127.0.0.1");
+        scopeValues["user_agent.original"].ShouldBe("UnitTest");
+        scopeValues.ContainsKey("TraceIdentifier").ShouldBeFalse();
+        scopeValues.ContainsKey("TraceId").ShouldBeFalse();
+        scopeValues.ContainsKey("SpanId").ShouldBeFalse();
+
+        responseScope["http.response.status_code"].ShouldBe(statusCode);
+        responseScope["http.server.request.duration_ms"].ShouldBeAssignableTo<double>();
     }
 
     [Fact(DisplayName = "InvokeAsync logs request completion when the next middleware throws")]
@@ -77,8 +78,6 @@ public sealed class LoggingMiddlewareTests
     [Fact(DisplayName = "InvokeAsync supports requests without optional context")]
     public async Task InvokeAsync_ShouldSupportRequestWithoutOptionalContext()
     {
-        Activity.Current = null;
-
         var logger = new TestLogger<LoggingMiddleware>();
         var httpContext = TestHttpContextFactory.CreateMinimalHttpContext();
 
@@ -93,14 +92,23 @@ public sealed class LoggingMiddlewareTests
 
         await middleware.InvokeAsync(httpContext);
 
-        var scope = logger.Scopes.ShouldHaveSingleItem();
-        var scopeValues = scope.ShouldBeAssignableTo<IReadOnlyDictionary<string, object?>>()!;
-        scopeValues["TraceId"].ShouldBeNull();
-        scopeValues["SpanId"].ShouldBeNull();
-        scopeValues["Endpoint"].ShouldBeNull();
-        scopeValues["UserId"].ShouldBeNull();
-        scopeValues["UserName"].ShouldBeNull();
-        scopeValues["RemoteIp"].ShouldBeNull();
-        scopeValues["UserAgent"].ShouldBe(string.Empty);
+        var scopeValues = FindScope(logger, "http.request.method");
+
+        scopeValues["http.route"].ShouldBeNull();
+        scopeValues["aspnetcore.endpoint.display_name"].ShouldBeNull();
+        scopeValues["enduser.id"].ShouldBeNull();
+        scopeValues["client.address"].ShouldBeNull();
+        scopeValues["user_agent.original"].ShouldBe(string.Empty);
+        scopeValues.ContainsKey("TraceId").ShouldBeFalse();
+        scopeValues.ContainsKey("SpanId").ShouldBeFalse();
+    }
+
+    private static IReadOnlyDictionary<string, object?> FindScope(
+        TestLogger<LoggingMiddleware> logger,
+        string key)
+    {
+        return logger.Scopes
+            .Select(scope => scope.ShouldBeAssignableTo<IReadOnlyDictionary<string, object?>>()!)
+            .Single(scope => scope.ContainsKey(key));
     }
 }

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
 
 using System.Diagnostics;
@@ -13,25 +14,23 @@ internal sealed class LoggingMiddleware(
     public async Task InvokeAsync(HttpContext httpContext)
     {
         var startedAt = Stopwatch.GetTimestamp();
-        var activity = Activity.Current;
         var endpoint = httpContext.GetEndpoint();
+        var route = endpoint is RouteEndpoint routeEndpoint
+            ? routeEndpoint.RoutePattern.RawText
+            : null;
 
         var userId = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
-        var userName = httpContext.User.Identity?.Name;
 
         using (logger.BeginScope(new Dictionary<string, object?>
         {
-            ["Transport"] = "http",
-            ["TraceIdentifier"] = httpContext.TraceIdentifier,
-            ["TraceId"] = activity?.TraceId.ToString(),
-            ["SpanId"] = activity?.SpanId.ToString(),
-            ["Method"] = httpContext.Request.Method,
-            ["Path"] = httpContext.Request.Path.Value,
-            ["Endpoint"] = endpoint?.DisplayName,
-            ["UserId"] = userId,
-            ["UserName"] = userName,
-            ["RemoteIp"] = httpContext.Connection.RemoteIpAddress?.ToString(),
-            ["UserAgent"] = httpContext.Request.Headers.UserAgent.ToString(),
+            ["network.protocol.name"] = "http",
+            ["http.request.method"] = httpContext.Request.Method,
+            ["url.path"] = httpContext.Request.Path.Value,
+            ["http.route"] = route,
+            ["aspnetcore.endpoint.display_name"] = endpoint?.DisplayName,
+            ["enduser.id"] = userId,
+            ["client.address"] = httpContext.Connection.RemoteIpAddress?.ToString(),
+            ["user_agent.original"] = httpContext.Request.Headers.UserAgent.ToString(),
         }))
         {
             try
@@ -45,11 +44,14 @@ internal sealed class LoggingMiddleware(
 
                 if (logger.IsEnabled(logLevel))
                 {
-                    logger.Log(
-                        logLevel,
-                        "HTTP request finished with status code {StatusCode} in {ElapsedMs} ms",
-                        httpContext.Response.StatusCode,
-                        elapsed.TotalMilliseconds);
+                    using (logger.BeginScope(new Dictionary<string, object?>
+                    {
+                        ["http.response.status_code"] = httpContext.Response.StatusCode,
+                        ["http.server.request.duration_ms"] = elapsed.TotalMilliseconds,
+                    }))
+                    {
+                        logger.Log(logLevel, "HTTP request finished");
+                    }
                 }
             }
         }
