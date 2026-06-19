@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -20,37 +21,26 @@ internal sealed class ExceptionHandler(
     {
         var activity = Activity.Current;
         var endpoint = httpContext.GetEndpoint();
+        var route = endpoint is RouteEndpoint routeEndpoint
+            ? routeEndpoint.RoutePattern.RawText
+            : null;
 
         var userId = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
-        var userName = httpContext.User.Identity?.Name;
 
-        logger.LogError(
-            exception,
-            """
-            Unhandled HTTP exception.
-            TraceIdentifier: {TraceIdentifier}
-            TraceId: {TraceId}
-            SpanId: {SpanId}
-            Method: {Method}
-            Path: {Path}
-            QueryString: {QueryString}
-            Endpoint: {Endpoint}
-            UserId: {UserId}
-            UserName: {UserName}
-            RemoteIp: {RemoteIp}
-            UserAgent: {UserAgent}
-            """,
-            httpContext.TraceIdentifier,
-            activity?.TraceId.ToString(),
-            activity?.SpanId.ToString(),
-            httpContext.Request.Method,
-            httpContext.Request.Path.Value,
-            httpContext.Request.QueryString.Value,
-            endpoint?.DisplayName,
-            userId,
-            userName,
-            httpContext.Connection.RemoteIpAddress?.ToString(),
-            httpContext.Request.Headers.UserAgent.ToString());
+        using (logger.BeginScope(new Dictionary<string, object?>
+        {
+            ["http.request.method"] = httpContext.Request.Method,
+            ["url.path"] = httpContext.Request.Path.Value,
+            ["url.query"] = httpContext.Request.QueryString.Value,
+            ["http.route"] = route,
+            ["aspnetcore.endpoint.display_name"] = endpoint?.DisplayName,
+            ["enduser.id"] = userId,
+            ["client.address"] = httpContext.Connection.RemoteIpAddress?.ToString(),
+            ["user_agent.original"] = httpContext.Request.Headers.UserAgent.ToString(),
+        }))
+        {
+            logger.LogError(exception, "Unhandled HTTP exception");
+        }
 
         var problemDetails = new ProblemDetails
         {

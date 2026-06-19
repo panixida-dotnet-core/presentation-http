@@ -47,6 +47,23 @@ public sealed class ExceptionHandlerTests
         var logEntry = logger.Entries.ShouldHaveSingleItem();
         logEntry.LogLevel.ShouldBe(Microsoft.Extensions.Logging.LogLevel.Error);
         logEntry.Exception.ShouldBeSameAs(exception);
+        logEntry.Message.ShouldBe("Unhandled HTTP exception");
+
+        var scopeValues = logger.Scopes
+            .ShouldHaveSingleItem()
+            .ShouldBeAssignableTo<IReadOnlyDictionary<string, object?>>()!;
+
+        scopeValues["http.request.method"].ShouldBe(HttpMethods.Get);
+        scopeValues["url.path"].ShouldBe("/orders");
+        scopeValues["url.query"].ShouldBe("?status=active");
+        scopeValues["http.route"].ShouldBe("/orders");
+        scopeValues["aspnetcore.endpoint.display_name"].ShouldBe("Test endpoint");
+        scopeValues["enduser.id"].ShouldBe("user-id");
+        scopeValues["client.address"].ShouldBe("127.0.0.1");
+        scopeValues["user_agent.original"].ShouldBe("UnitTest");
+        scopeValues.ContainsKey("TraceIdentifier").ShouldBeFalse();
+        scopeValues.ContainsKey("TraceId").ShouldBeFalse();
+        scopeValues.ContainsKey("SpanId").ShouldBeFalse();
     }
 
     [Fact(DisplayName = "TryHandleAsync hides exception details outside Development")]
@@ -90,4 +107,5 @@ public sealed class ExceptionHandlerTests
 
         return JsonDocument.Parse(httpContext.Response.Body);
     }
+
 }

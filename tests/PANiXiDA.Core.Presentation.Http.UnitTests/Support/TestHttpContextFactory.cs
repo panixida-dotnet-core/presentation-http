@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.Routing.Patterns;
 
 using System.Net;
 using System.Security.Claims;
@@ -29,8 +31,10 @@ internal static class TestHttpContextFactory
         httpContext.Request.Path = "/orders";
         httpContext.Request.Headers.UserAgent = "UnitTest";
         httpContext.Connection.RemoteIpAddress = IPAddress.Parse("127.0.0.1");
-        httpContext.SetEndpoint(new Endpoint(
+        httpContext.SetEndpoint(new RouteEndpoint(
             static context => Task.CompletedTask,
+            RoutePatternFactory.Parse("/orders"),
+            order: 0,
             new EndpointMetadataCollection(),
             "Test endpoint"));
 
