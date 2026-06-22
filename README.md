@@ -52,12 +52,6 @@ app.UseHttp(typeof(Program).Assembly);
 app.Run();
 ```
 
-Pass `null` to `AddHttp` if forwarded headers should use the package defaults.
-
-```csharp
-builder.Services.AddHttp(configuration: null);
-```
-
 ## Forwarded Headers
 
 The package configures these forwarded headers by default:
@@ -236,6 +230,17 @@ In `Development`, `UseHttp` exposes:
 - Scalar API reference at `/scalar`.
 
 OpenAPI registration also enables Scalar transformers for Scalar-specific document extensions.
+
+The Scalar browser tab title can be configured from application configuration.
+If the title is not configured or is blank, Scalar uses its default document title.
+
+```json
+{
+  "ScalarConfiguration": {
+    "Title": "Orders API Reference"
+  }
+}
+```
 
 OpenAPI is not mapped automatically outside `Development`.
 
