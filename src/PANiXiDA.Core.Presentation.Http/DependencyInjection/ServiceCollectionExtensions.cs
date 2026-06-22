@@ -27,7 +27,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddForwardedHeadersConfiguration(configuration);
         services.AddApiVersioningConfiguration();
-        services.AddOpenApiConfiguration();
+        services.AddOpenApiConfiguration(configuration);
         services.AddProblemDetailsConfiguration();
         services.AddExceptionHandler<ExceptionHandler>();
         services.AddValidation();

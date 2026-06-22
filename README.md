@@ -237,6 +237,17 @@ In `Development`, `UseHttp` exposes:
 
 OpenAPI registration also enables Scalar transformers for Scalar-specific document extensions.
 
+The Scalar browser tab title can be configured from application configuration.
+If the title is not configured or is blank, Scalar uses its default document title.
+
+```json
+{
+  "Scalar": {
+    "Title": "Orders API Reference"
+  }
+}
+```
+
 OpenAPI is not mapped automatically outside `Development`.
 
 ## API Versioning
