@@ -12,20 +12,15 @@ internal static class OpenApiConfiguration
 {
     internal static IServiceCollection AddOpenApiConfiguration(
         this IServiceCollection services,
-        IConfiguration? configuration = null)
+        IConfiguration configuration)
     {
         services.AddOpenApi(options =>
         {
             options.AddScalarTransformers();
         });
 
-        services.AddOptions<ScalarApiReferenceConfiguration>();
-
-        if (configuration is not null)
-        {
-            services.Configure<ScalarApiReferenceConfiguration>(
-                configuration.GetSection(ScalarApiReferenceConfiguration.SectionName));
-        }
+        services.Configure<ScalarConfiguration>(
+            configuration.GetSection(nameof(ScalarConfiguration)));
 
         return services;
     }
@@ -35,7 +30,7 @@ internal static class OpenApiConfiguration
         if (app.Environment.IsDevelopment())
         {
             var scalarConfiguration = app.Services
-                .GetRequiredService<IOptions<ScalarApiReferenceConfiguration>>()
+                .GetRequiredService<IOptions<ScalarConfiguration>>()
                 .Value;
             var scalarTitle = scalarConfiguration.Title;
 

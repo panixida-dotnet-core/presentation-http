@@ -52,12 +52,6 @@ app.UseHttp(typeof(Program).Assembly);
 app.Run();
 ```
 
-Pass `null` to `AddHttp` if forwarded headers should use the package defaults.
-
-```csharp
-builder.Services.AddHttp(configuration: null);
-```
-
 ## Forwarded Headers
 
 The package configures these forwarded headers by default:
@@ -242,7 +236,7 @@ If the title is not configured or is blank, Scalar uses its default document tit
 
 ```json
 {
-  "Scalar": {
+  "ScalarConfiguration": {
     "Title": "Orders API Reference"
   }
 }

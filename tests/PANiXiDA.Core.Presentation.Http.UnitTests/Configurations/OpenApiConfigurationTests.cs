@@ -21,8 +21,9 @@ public sealed class OpenApiConfigurationTests
     public void AddOpenApiConfiguration_ShouldReturnSameServiceCollection()
     {
         var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder().Build();
 
-        var result = services.AddOpenApiConfiguration();
+        var result = services.AddOpenApiConfiguration(configuration);
 
         result.ShouldBeSameAs(services);
     }
@@ -31,8 +32,9 @@ public sealed class OpenApiConfigurationTests
     public void AddOpenApiConfiguration_ShouldApplyScalarTransformers()
     {
         var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder().Build();
 
-        services.AddOpenApiConfiguration();
+        services.AddOpenApiConfiguration(configuration);
 
         using var serviceProvider = services.BuildServiceProvider();
         var options = serviceProvider.GetRequiredService<IOptionsMonitor<OpenApiOptions>>().Get("v1");
@@ -47,14 +49,14 @@ public sealed class OpenApiConfigurationTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                [ScalarApiReferenceConfiguration.SectionName + ":" + nameof(ScalarApiReferenceConfiguration.Title)] = "Orders API Reference"
+                [nameof(ScalarConfiguration) + ":" + nameof(ScalarConfiguration.Title)] = "Orders API Reference"
             })
             .Build();
 
         services.AddOpenApiConfiguration(configuration);
 
         using var serviceProvider = services.BuildServiceProvider();
-        var options = serviceProvider.GetRequiredService<IOptions<ScalarApiReferenceConfiguration>>().Value;
+        var options = serviceProvider.GetRequiredService<IOptions<ScalarConfiguration>>().Value;
 
         options.Title.ShouldBe("Orders API Reference");
     }
@@ -67,7 +69,7 @@ public sealed class OpenApiConfigurationTests
             EnvironmentName = Environments.Development
         });
 
-        builder.Services.AddOpenApiConfiguration();
+        builder.Services.AddOpenApiConfiguration(builder.Configuration);
 
         using var app = builder.Build();
 
@@ -86,7 +88,7 @@ public sealed class OpenApiConfigurationTests
         await using var app = await CreateStartedApplicationAsync(
             new Dictionary<string, string?>
             {
-                [ScalarApiReferenceConfiguration.SectionName + ":" + nameof(ScalarApiReferenceConfiguration.Title)] = "Orders API Reference"
+                [nameof(ScalarConfiguration) + ":" + nameof(ScalarConfiguration.Title)] = "Orders API Reference"
             },
             TestContext.Current.CancellationToken);
         using var client = CreateClient(app);
@@ -105,6 +107,8 @@ public sealed class OpenApiConfigurationTests
         {
             EnvironmentName = Environments.Production
         });
+
+        builder.Services.AddOpenApiConfiguration(builder.Configuration);
 
         using var app = builder.Build();
 

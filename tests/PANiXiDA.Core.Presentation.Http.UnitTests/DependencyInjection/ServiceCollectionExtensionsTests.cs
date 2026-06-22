@@ -82,11 +82,11 @@ public sealed class ServiceCollectionExtensionsTests
         healthCheckService.ShouldNotBeNull();
     }
 
-    [Fact(DisplayName = "AddHttp uses default settings when configuration is null")]
-    public void AddHttp_ShouldUseDefaultForwardedHeadersConfigurationIfConfigurationIsNull()
+    [Fact(DisplayName = "AddHttp uses default settings when configuration is empty")]
+    public void AddHttp_ShouldUseDefaultSettingsWhenConfigurationIsEmpty()
     {
         var services = new ServiceCollection();
-        IConfiguration? configuration = null;
+        var configuration = new ConfigurationBuilder().Build();
 
         var result = services.AddHttp(configuration);
 

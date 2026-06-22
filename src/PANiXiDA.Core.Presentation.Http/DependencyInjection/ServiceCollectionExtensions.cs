@@ -19,11 +19,11 @@ public static class ServiceCollectionExtensions
     /// Registers the default HTTP presentation services, including API versioning, OpenAPI, Problem Details, exception handling, validation, health checks, and forwarded headers.
     /// </summary>
     /// <param name="services">The application service collection.</param>
-    /// <param name="configuration">The application configuration. The standard <c>ForwardedHeaders</c> section is used when present. Pass a custom forwarded headers section or <see langword="null"/> to use defaults.</param>
+    /// <param name="configuration">The application configuration. The standard <c>ForwardedHeaders</c> section is used when present.</param>
     /// <returns>The original service collection for further configuration.</returns>
     public static IServiceCollection AddHttp(
         this IServiceCollection services,
-        IConfiguration? configuration)
+        IConfiguration configuration)
     {
         services.AddForwardedHeadersConfiguration(configuration);
         services.AddApiVersioningConfiguration();
