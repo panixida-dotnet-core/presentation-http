@@ -93,6 +93,22 @@ public sealed class ServiceCollectionExtensionsTests
         result.ShouldBeSameAs(services);
     }
 
+    [Fact(DisplayName = "AddHttp rejects null values in the module collection")]
+    public void AddHttp_ShouldRejectNullModule()
+    {
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder().Build();
+        HttpModule[] modules = [null!];
+
+        var exception = Should.Throw<ArgumentException>(() =>
+        {
+            services.AddHttp(configuration, modules);
+        });
+
+        exception.ParamName.ShouldBe("modules");
+        exception.Message.ShouldContain("cannot contain null values");
+    }
+
     [Fact(DisplayName = "AddHttp rejects duplicate module document names")]
     public void AddHttp_ShouldRejectDuplicateModuleDocumentNames()
     {
@@ -153,8 +169,8 @@ public sealed class ServiceCollectionExtensionsTests
         EndpointMappingRecorder.Entries.ShouldContain(nameof(BDiscoveredEndpointGroup));
     }
 
-    [Fact(DisplayName = "UseHttp maps endpoint groups from registered HTTP modules")]
-    public void UseHttp_ShouldMapRegisteredHttpModules()
+    [Fact(DisplayName = "UseHttp maps a registered module assembly only once")]
+    public void UseHttp_ShouldMapRegisteredHttpModuleAssemblyOnce()
     {
         EndpointMappingRecorder.Clear();
 
@@ -171,11 +187,13 @@ public sealed class ServiceCollectionExtensionsTests
 
         using var app = builder.Build();
 
-        var result = app.UseHttp();
+        var result = app.UseHttp(module.PresentationAssembly);
 
         result.ShouldBeSameAs(app);
-        EndpointMappingRecorder.Entries.ShouldContain(nameof(ADiscoveredEndpointGroup));
-        EndpointMappingRecorder.Entries.ShouldContain(nameof(BDiscoveredEndpointGroup));
+        EndpointMappingRecorder.Entries.Count(
+            entry => entry == nameof(ADiscoveredEndpointGroup)).ShouldBe(1);
+        EndpointMappingRecorder.Entries.Count(
+            entry => entry == nameof(BDiscoveredEndpointGroup)).ShouldBe(1);
     }
 
     [Fact(DisplayName = "UseHttp uses ProblemDetails exception handler in Development")]
