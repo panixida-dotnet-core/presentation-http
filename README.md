@@ -33,7 +33,7 @@ It provides common Minimal API endpoint conventions, API versioning, OpenAPI set
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="PANiXiDA.Core.Presentation.Http" Version="2.0.0-preview" />
+  <PackageReference Include="PANiXiDA.Core.Presentation.Http" Version="2.0.0" />
 </ItemGroup>
 ```
 
