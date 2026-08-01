@@ -16,6 +16,7 @@ It provides common Minimal API endpoint conventions, API versioning, OpenAPI set
 
 - `AddHttp` registers the default HTTP presentation services.
 - `UseHttp` adds the default middleware pipeline and maps discovered endpoint groups.
+- `HttpModule` can map a presentation assembly to a separate OpenAPI document and Scalar source.
 - Health checks are registered by `AddHttp` and exposed at `/health` by `UseHttp`.
 - `IEndpointGroup` defines route, resource name, and API version metadata for Minimal API endpoint groups.
 - `IEndpoint<TGroup>` defines route, name, and summary metadata for endpoints that belong to a specific group.
@@ -230,6 +231,45 @@ In `Development`, `UseHttp` exposes:
 - Scalar API reference at `/scalar`.
 
 OpenAPI registration also enables Scalar transformers for Scalar-specific document extensions.
+
+### Module documents
+
+Applications composed from multiple presentation modules can expose one OpenAPI document per module.
+Register each module once with a unique document name, display title, and presentation assembly.
+`UseHttp` automatically maps endpoint groups from registered module assemblies.
+
+```csharp
+using PANiXiDA.Core.Presentation.Http.DependencyInjection;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddHttp(
+    builder.Configuration,
+    new HttpModule(
+        "identity",
+        "Identity API",
+        typeof(IdentityPresentationAssembly).Assembly),
+    new HttpModule(
+        "compendium",
+        "Compendium API",
+        typeof(CompendiumPresentationAssembly).Assembly));
+
+var app = builder.Build();
+
+app.UseHttp();
+
+app.Run();
+```
+
+This configuration exposes:
+
+- `/openapi/identity.json` for Identity endpoints;
+- `/openapi/compendium.json` for Compendium endpoints;
+- `/scalar` with a document selector for both modules.
+
+OpenAPI documents are filtered by module metadata while API version metadata remains independent.
+Document names are compared case-insensitively, and a presentation assembly can belong to only one module.
+When no modules are registered, the existing combined `/openapi/v1.json` document remains the default.
 
 The Scalar browser tab title can be configured from application configuration.
 If the title is not configured or is blank, Scalar uses its default document title.

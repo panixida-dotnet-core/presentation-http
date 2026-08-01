@@ -25,9 +25,37 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        return AddHttpCore(services, configuration, []);
+    }
+
+    /// <summary>
+    /// Registers the default HTTP presentation services and separate OpenAPI documents for the specified modules.
+    /// </summary>
+    /// <param name="services">The application service collection.</param>
+    /// <param name="configuration">The application configuration. The standard <c>ForwardedHeaders</c> section is used when present.</param>
+    /// <param name="modules">The modules to map and expose as separate OpenAPI documents.</param>
+    /// <returns>The original service collection for further configuration.</returns>
+    public static IServiceCollection AddHttp(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        params HttpModule[] modules)
+    {
+        ArgumentNullException.ThrowIfNull(modules);
+
+        return AddHttpCore(services, configuration, modules);
+    }
+
+    private static IServiceCollection AddHttpCore(
+        IServiceCollection services,
+        IConfiguration configuration,
+        IReadOnlyCollection<HttpModule> modules)
+    {
+        var moduleRegistry = new HttpModuleRegistry(modules);
+
+        services.AddSingleton(moduleRegistry);
         services.AddForwardedHeadersConfiguration(configuration);
         services.AddApiVersioningConfiguration();
-        services.AddOpenApiConfiguration(configuration);
+        services.AddOpenApiConfiguration(configuration, moduleRegistry.Modules);
         services.AddProblemDetailsConfiguration();
         services.AddExceptionHandler<ExceptionHandler>();
         services.AddValidation();
@@ -51,8 +79,22 @@ public static class ServiceCollectionExtensions
         app.UseOpenApiConfiguration();
         app.MapHealthChecks("/health");
 
+        var mappedAssemblies = new HashSet<Assembly>();
+        var moduleRegistry = app.Services.GetRequiredService<HttpModuleRegistry>();
+
+        foreach (var module in moduleRegistry.Modules)
+        {
+            EndpointGroupMapper.MapDiscoveredGroups(app, module.PresentationAssembly);
+            mappedAssemblies.Add(module.PresentationAssembly);
+        }
+
         foreach (var assembly in assemblies)
         {
+            if (!mappedAssemblies.Add(assembly))
+            {
+                continue;
+            }
+
             EndpointGroupMapper.MapDiscoveredGroups(app, assembly);
         }
 

@@ -10,8 +10,11 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 using PANiXiDA.Core.Presentation.Http.Configurations;
+using PANiXiDA.Core.Presentation.Http.DependencyInjection;
+using PANiXiDA.Core.Presentation.Http.UnitTests.Endpoints.Fixtures.Groups;
 
 using System.Net;
+using System.Text.Json;
 
 namespace PANiXiDA.Core.Presentation.Http.UnitTests.Configurations;
 
@@ -23,7 +26,7 @@ public sealed class OpenApiConfigurationTests
         var services = new ServiceCollection();
         var configuration = new ConfigurationBuilder().Build();
 
-        var result = services.AddOpenApiConfiguration(configuration);
+        var result = services.AddOpenApiConfiguration(configuration, []);
 
         result.ShouldBeSameAs(services);
     }
@@ -34,7 +37,7 @@ public sealed class OpenApiConfigurationTests
         var services = new ServiceCollection();
         var configuration = new ConfigurationBuilder().Build();
 
-        services.AddOpenApiConfiguration(configuration);
+        services.AddOpenApiConfiguration(configuration, []);
 
         using var serviceProvider = services.BuildServiceProvider();
         var options = serviceProvider.GetRequiredService<IOptionsMonitor<OpenApiOptions>>().Get("v1");
@@ -53,7 +56,7 @@ public sealed class OpenApiConfigurationTests
             })
             .Build();
 
-        services.AddOpenApiConfiguration(configuration);
+        services.AddOpenApiConfiguration(configuration, []);
 
         using var serviceProvider = services.BuildServiceProvider();
         var options = serviceProvider.GetRequiredService<IOptions<ScalarConfiguration>>().Value;
@@ -69,7 +72,7 @@ public sealed class OpenApiConfigurationTests
             EnvironmentName = Environments.Development
         });
 
-        builder.Services.AddOpenApiConfiguration(builder.Configuration);
+        builder.Services.AddOpenApiConfiguration(builder.Configuration, []);
 
         using var app = builder.Build();
 
@@ -100,6 +103,58 @@ public sealed class OpenApiConfigurationTests
         content.ShouldContain("<title>Orders API Reference</title>");
     }
 
+    [Fact(DisplayName = "OpenAPI configuration exposes separate documents and Scalar sources for HTTP modules")]
+    public async Task UseOpenApiConfiguration_ShouldExposeSeparateModuleDocuments()
+    {
+        var documentedModule = new HttpModule(
+            "tests",
+            "Test endpoints",
+            typeof(OrderedEndpointGroup).Assembly);
+        var emptyModule = new HttpModule(
+            "core",
+            "Core endpoints",
+            typeof(OpenApiConfiguration).Assembly);
+
+        await using var app = await CreateStartedModuleApplicationAsync(
+            [documentedModule, emptyModule],
+            TestContext.Current.CancellationToken);
+        using var client = CreateClient(app);
+
+        using var documentedResponse = await client.GetAsync(
+            "/openapi/tests.json",
+            TestContext.Current.CancellationToken);
+        using var emptyResponse = await client.GetAsync(
+            "/openapi/core.json",
+            TestContext.Current.CancellationToken);
+        using var scalarResponse = await client.GetAsync(
+            "/scalar",
+            TestContext.Current.CancellationToken);
+        var documentedContent = await documentedResponse.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        var emptyContent = await emptyResponse.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        var scalarContent = await scalarResponse.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        using var documentedDocument = JsonDocument.Parse(documentedContent);
+        using var emptyDocument = JsonDocument.Parse(emptyContent);
+
+        documentedResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        emptyResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        scalarResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        documentedDocument.RootElement
+            .GetProperty("paths")
+            .TryGetProperty("/api/v1/ordered/first", out _)
+            .ShouldBeTrue();
+        emptyDocument.RootElement
+            .GetProperty("paths")
+            .EnumerateObject()
+            .ShouldBeEmpty();
+        scalarContent.ShouldContain("Test endpoints");
+        scalarContent.ShouldContain("Core endpoints");
+        scalarContent.ShouldContain("openapi/tests.json");
+        scalarContent.ShouldContain("openapi/core.json");
+    }
+
     [Fact(DisplayName = "OpenAPI configuration does not map the specification or Scalar endpoints outside Development")]
     public void UseOpenApiConfiguration_ShouldNotMapOpenApiOrScalarEndpointsOutsideDevelopment()
     {
@@ -108,7 +163,7 @@ public sealed class OpenApiConfigurationTests
             EnvironmentName = Environments.Production
         });
 
-        builder.Services.AddOpenApiConfiguration(builder.Configuration);
+        builder.Services.AddOpenApiConfiguration(builder.Configuration, []);
 
         using var app = builder.Build();
 
@@ -140,10 +195,30 @@ public sealed class OpenApiConfigurationTests
 
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         builder.Configuration.AddInMemoryCollection(configurationValues);
-        builder.Services.AddOpenApiConfiguration(builder.Configuration);
+        builder.Services.AddOpenApiConfiguration(builder.Configuration, []);
 
         var app = builder.Build();
         app.UseOpenApiConfiguration();
+
+        await app.StartAsync(cancellationToken);
+
+        return app;
+    }
+
+    private static async Task<WebApplication> CreateStartedModuleApplicationAsync(
+        HttpModule[] modules,
+        CancellationToken cancellationToken)
+    {
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            EnvironmentName = Environments.Development
+        });
+
+        builder.WebHost.UseUrls("http://127.0.0.1:0");
+        builder.Services.AddHttp(builder.Configuration, modules);
+
+        var app = builder.Build();
+        app.UseHttp();
 
         await app.StartAsync(cancellationToken);
 

@@ -1,8 +1,11 @@
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Mvc.ApiExplorer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+
+using PANiXiDA.Core.Presentation.Http.DependencyInjection;
 
 using Scalar.AspNetCore;
 
@@ -12,12 +15,30 @@ internal static class OpenApiConfiguration
 {
     internal static IServiceCollection AddOpenApiConfiguration(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IReadOnlyList<HttpModule> modules)
     {
-        services.AddOpenApi(options =>
+        if (modules.Count == 0)
         {
-            options.AddScalarTransformers();
-        });
+            services.AddOpenApi(options =>
+            {
+                options.AddScalarTransformers();
+            });
+        }
+        else
+        {
+            foreach (var module in modules)
+            {
+                services.AddOpenApi(module.Name, options =>
+                {
+                    options.AddScalarTransformers();
+                    options.ShouldInclude = description =>
+                    {
+                        return ShouldInclude(description, module.Name);
+                    };
+                });
+            }
+        }
 
         services.Configure<ScalarConfiguration>(
             configuration.GetSection(nameof(ScalarConfiguration)));
@@ -33,6 +54,8 @@ internal static class OpenApiConfiguration
                 .GetRequiredService<IOptions<ScalarConfiguration>>()
                 .Value;
             var scalarTitle = scalarConfiguration.Title;
+            var moduleRegistry = app.Services.GetService<HttpModuleRegistry>();
+            var modules = moduleRegistry?.Modules ?? [];
 
             app.MapOpenApi();
             app.MapScalarApiReference(options =>
@@ -41,9 +64,23 @@ internal static class OpenApiConfiguration
                 {
                     options.WithTitle(scalarTitle);
                 }
+
+                foreach (var module in modules)
+                {
+                    options.AddDocument(module.Name, module.Title);
+                }
             });
         }
 
         return app;
+    }
+
+    private static bool ShouldInclude(ApiDescription description, string moduleName)
+    {
+        return description.ActionDescriptor.EndpointMetadata
+            .OfType<HttpModuleMetadata>()
+            .Any(metadata => StringComparer.OrdinalIgnoreCase.Equals(
+                metadata.Name,
+                moduleName));
     }
 }

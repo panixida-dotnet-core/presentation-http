@@ -93,6 +93,45 @@ public sealed class ServiceCollectionExtensionsTests
         result.ShouldBeSameAs(services);
     }
 
+    [Fact(DisplayName = "AddHttp rejects duplicate module document names")]
+    public void AddHttp_ShouldRejectDuplicateModuleDocumentNames()
+    {
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder().Build();
+        var firstModule = new HttpModule(
+            "identity",
+            typeof(ADiscoveredEndpointGroup).Assembly);
+        var secondModule = new HttpModule(
+            "IDENTITY",
+            typeof(ServiceCollectionExtensions).Assembly);
+
+        var exception = Should.Throw<ArgumentException>(() =>
+        {
+            services.AddHttp(configuration, firstModule, secondModule);
+        });
+
+        exception.ParamName.ShouldBe("modules");
+        exception.Message.ShouldContain("IDENTITY");
+    }
+
+    [Fact(DisplayName = "AddHttp rejects a presentation assembly assigned to multiple modules")]
+    public void AddHttp_ShouldRejectDuplicateModuleAssemblies()
+    {
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder().Build();
+        var assembly = typeof(ADiscoveredEndpointGroup).Assembly;
+        var firstModule = new HttpModule("identity", assembly);
+        var secondModule = new HttpModule("compendium", assembly);
+
+        var exception = Should.Throw<ArgumentException>(() =>
+        {
+            services.AddHttp(configuration, firstModule, secondModule);
+        });
+
+        exception.ParamName.ShouldBe("modules");
+        exception.Message.ShouldContain(assembly.FullName!);
+    }
+
     [Fact(DisplayName = "UseHttp adds middleware and maps groups from the provided assemblies")]
     public void UseHttp_ShouldReturnSameApplicationAndMapEndpointGroups()
     {
@@ -108,6 +147,31 @@ public sealed class ServiceCollectionExtensionsTests
         using var app = builder.Build();
 
         var result = app.UseHttp(typeof(ADiscoveredEndpointGroup).Assembly);
+
+        result.ShouldBeSameAs(app);
+        EndpointMappingRecorder.Entries.ShouldContain(nameof(ADiscoveredEndpointGroup));
+        EndpointMappingRecorder.Entries.ShouldContain(nameof(BDiscoveredEndpointGroup));
+    }
+
+    [Fact(DisplayName = "UseHttp maps endpoint groups from registered HTTP modules")]
+    public void UseHttp_ShouldMapRegisteredHttpModules()
+    {
+        EndpointMappingRecorder.Clear();
+
+        var module = new HttpModule(
+            "tests",
+            "Test endpoints",
+            typeof(ADiscoveredEndpointGroup).Assembly);
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            EnvironmentName = Environments.Production
+        });
+
+        builder.Services.AddHttp(builder.Configuration, module);
+
+        using var app = builder.Build();
+
+        var result = app.UseHttp();
 
         result.ShouldBeSameAs(app);
         EndpointMappingRecorder.Entries.ShouldContain(nameof(ADiscoveredEndpointGroup));
