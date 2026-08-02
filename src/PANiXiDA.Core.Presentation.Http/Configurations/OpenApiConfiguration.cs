@@ -5,7 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
-using PANiXiDA.Core.Presentation.Http.DependencyInjection;
+using PANiXiDA.Core.Presentation.Http.Modularity;
 
 using Scalar.AspNetCore;
 
@@ -65,10 +65,8 @@ internal static class OpenApiConfiguration
                     options.WithTitle(scalarTitle);
                 }
 
-                foreach (var module in modules)
-                {
-                    options.AddDocument(module.Name, module.Title);
-                }
+                options.AddDocuments(modules.Select(static module =>
+                    new ScalarDocument(module.Name, module.Title)));
             });
         }
 
@@ -78,9 +76,9 @@ internal static class OpenApiConfiguration
     private static bool ShouldInclude(ApiDescription description, string moduleName)
     {
         return description.ActionDescriptor.EndpointMetadata
-            .OfType<HttpModuleMetadata>()
-            .Any(metadata => StringComparer.OrdinalIgnoreCase.Equals(
-                metadata.Name,
+            .OfType<HttpModule>()
+            .Any(module => StringComparer.OrdinalIgnoreCase.Equals(
+                module.Name,
                 moduleName));
     }
 }

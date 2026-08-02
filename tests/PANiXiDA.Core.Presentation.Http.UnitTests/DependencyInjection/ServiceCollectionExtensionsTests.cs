@@ -9,6 +9,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 using PANiXiDA.Core.Presentation.Http.DependencyInjection;
+using PANiXiDA.Core.Presentation.Http.Modularity;
 using PANiXiDA.Core.Presentation.Http.UnitTests.Endpoints;
 using PANiXiDA.Core.Presentation.Http.UnitTests.Endpoints.Fixtures.Groups;
 

@@ -1,6 +1,6 @@
-using PANiXiDA.Core.Presentation.Http.DependencyInjection;
+using PANiXiDA.Core.Presentation.Http.Modularity;
 
-namespace PANiXiDA.Core.Presentation.Http.UnitTests.DependencyInjection;
+namespace PANiXiDA.Core.Presentation.Http.UnitTests.Modularity;
 
 public sealed class HttpModuleTests
 {

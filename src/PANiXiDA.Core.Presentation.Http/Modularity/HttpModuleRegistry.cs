@@ -1,7 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 
-namespace PANiXiDA.Core.Presentation.Http.DependencyInjection;
+namespace PANiXiDA.Core.Presentation.Http.Modularity;
 
 internal sealed class HttpModuleRegistry
 {

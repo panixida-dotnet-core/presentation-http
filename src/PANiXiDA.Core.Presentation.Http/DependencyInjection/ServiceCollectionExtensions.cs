@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using PANiXiDA.Core.Presentation.Http.Configurations;
 using PANiXiDA.Core.Presentation.Http.Endpoints;
 using PANiXiDA.Core.Presentation.Http.Middlewares;
+using PANiXiDA.Core.Presentation.Http.Modularity;
 
 using System.Reflection;
 

@@ -3,9 +3,9 @@ using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 
-using PANiXiDA.Core.Presentation.Http.Configurations;
 using PANiXiDA.Core.Presentation.Http.DependencyInjection;
 using PANiXiDA.Core.Presentation.Http.Endpoints;
+using PANiXiDA.Core.Presentation.Http.Modularity;
 using PANiXiDA.Core.Presentation.Http.UnitTests.Endpoints.Fixtures.Endpoints;
 using PANiXiDA.Core.Presentation.Http.UnitTests.Endpoints.Fixtures.Groups;
 
@@ -63,8 +63,8 @@ public sealed class EndpointMapperTests
         firstEndpoint.Metadata.GetMetadata<IEndpointSummaryMetadata>()?.Summary.ShouldBe("Gets the first ordered endpoint.");
     }
 
-    [Fact(DisplayName = "MapGroupEndpoints applies HTTP module metadata to mapped endpoints")]
-    public void MapGroupEndpoints_ShouldApplyHttpModuleMetadata()
+    [Fact(DisplayName = "MapGroupEndpoints attaches the HTTP module to mapped endpoints")]
+    public void MapGroupEndpoints_ShouldAttachHttpModule()
     {
         var module = new HttpModule(
             "tests",
@@ -78,10 +78,9 @@ public sealed class EndpointMapperTests
         EndpointMapper.MapGroupEndpoints<OrderedEndpointGroup>(app);
 
         var firstEndpoint = GetRouteEndpoint(app, "/api/v{version:apiVersion}/ordered/first");
-        var metadata = firstEndpoint.Metadata.GetMetadata<HttpModuleMetadata>();
+        var metadata = firstEndpoint.Metadata.GetMetadata<HttpModule>();
 
-        metadata.ShouldNotBeNull();
-        metadata.Name.ShouldBe("tests");
+        metadata.ShouldBeSameAs(module);
     }
 
     private static List<string?> GetRoutePatterns(WebApplication app)

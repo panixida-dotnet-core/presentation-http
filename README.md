@@ -240,6 +240,7 @@ Register each module once with a unique document name, display title, and presen
 
 ```csharp
 using PANiXiDA.Core.Presentation.Http.DependencyInjection;
+using PANiXiDA.Core.Presentation.Http.Modularity;
 
 var builder = WebApplication.CreateBuilder(args);
 

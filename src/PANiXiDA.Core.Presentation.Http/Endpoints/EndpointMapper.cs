@@ -3,8 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 
-using PANiXiDA.Core.Presentation.Http.Configurations;
-using PANiXiDA.Core.Presentation.Http.DependencyInjection;
+using PANiXiDA.Core.Presentation.Http.Modularity;
 
 using System.Reflection;
 
@@ -45,7 +44,7 @@ public static class EndpointMapper
         if (moduleRegistry is not null &&
             moduleRegistry.TryGetModule(typeof(TGroup).Assembly, out var module))
         {
-            group.WithMetadata(new HttpModuleMetadata(module.Name));
+            group.WithMetadata(module);
         }
 
         MapGroupEndpoints<TGroup>(group, endpoints.ServiceProvider);

@@ -1,6 +1,6 @@
 using System.Reflection;
 
-namespace PANiXiDA.Core.Presentation.Http.DependencyInjection;
+namespace PANiXiDA.Core.Presentation.Http.Modularity;
 
 /// <summary>
 /// Describes an HTTP presentation module and its OpenAPI document.
