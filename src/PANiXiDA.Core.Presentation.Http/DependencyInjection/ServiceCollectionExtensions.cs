@@ -82,11 +82,13 @@ public static class ServiceCollectionExtensions
 
         var mappedAssemblies = new HashSet<Assembly>();
         var moduleRegistry = app.Services.GetRequiredService<HttpModuleRegistry>();
+        var moduleAssemblies = moduleRegistry.Modules.Select(
+            static module => module.PresentationAssembly);
 
-        foreach (var module in moduleRegistry.Modules)
+        foreach (var presentationAssembly in moduleAssemblies)
         {
-            EndpointGroupMapper.MapDiscoveredGroups(app, module.PresentationAssembly);
-            mappedAssemblies.Add(module.PresentationAssembly);
+            EndpointGroupMapper.MapDiscoveredGroups(app, presentationAssembly);
+            mappedAssemblies.Add(presentationAssembly);
         }
 
         foreach (var assembly in assemblies)
