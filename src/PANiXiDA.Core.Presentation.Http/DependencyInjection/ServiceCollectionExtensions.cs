@@ -56,6 +56,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(moduleRegistry);
         services.AddForwardedHeadersConfiguration(configuration);
         services.AddApiVersioningConfiguration();
+        services.AddJsonConfiguration();
         services.AddOpenApiConfiguration(configuration, moduleRegistry.Modules);
         services.AddProblemDetailsConfiguration();
         services.AddExceptionHandler<ExceptionHandler>();

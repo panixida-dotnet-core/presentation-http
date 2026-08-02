@@ -16,6 +16,7 @@ It provides common Minimal API endpoint conventions, API versioning, OpenAPI set
 
 - `AddHttp` registers the default HTTP presentation services.
 - `UseHttp` adds the default middleware pipeline and maps discovered endpoint groups.
+- JSON numeric values use strict number handling.
 - Module assemblies can be mapped to separate OpenAPI documents and Scalar sources through the `HttpModules` configuration section.
 - Health checks are registered by `AddHttp` and exposed at `/health` by `UseHttp`.
 - `IEndpointGroup` defines route, resource name, and API version metadata for Minimal API endpoint groups.
@@ -237,6 +238,12 @@ In `Development`, the response includes the exception message in `detail`.
 | `Unexpected` | 500 | `Server error` |
 
 Validation error fields are used as `ValidationProblem` keys. If a validation error has no field, the key is `general`.
+
+## JSON
+
+`AddHttp` configures strict JSON number handling. Numeric properties in JSON request bodies must be encoded as JSON numbers rather than quoted strings. This also keeps numeric OpenAPI schemas typed as `integer` or `number` instead of an `integer | string` or `number | string` union.
+
+String properties and enums configured for string serialization are unaffected.
 
 ## OpenAPI
 
