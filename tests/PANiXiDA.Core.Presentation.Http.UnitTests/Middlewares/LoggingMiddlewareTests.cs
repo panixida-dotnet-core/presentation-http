@@ -40,6 +40,7 @@ public sealed class LoggingMiddlewareTests
         scopeValues["network.protocol.name"].ShouldBe("http");
         scopeValues["http.request.method"].ShouldBe(HttpMethods.Post);
         scopeValues["url.path"].ShouldBe("/orders");
+        scopeValues["url.query"].ShouldBe(string.Empty);
         scopeValues["http.route"].ShouldBe("/orders");
         scopeValues["aspnetcore.endpoint.display_name"].ShouldBe("Test endpoint");
         scopeValues["enduser.id"].ShouldBe("user-id");

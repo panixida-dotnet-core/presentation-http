@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 using PANiXiDA.Core.Presentation.Http.Middlewares;
 using PANiXiDA.Core.Presentation.Http.UnitTests.Support;
@@ -10,14 +11,14 @@ using System.Text.Json;
 
 namespace PANiXiDA.Core.Presentation.Http.UnitTests.Middlewares;
 
-public sealed class ExceptionHandlerTests
+public sealed class BadHttpRequestExceptionHandlerTests
 {
-    [Fact(DisplayName = "TryHandleAsync returns ProblemDetails with exception details in Development")]
-    public async Task TryHandleAsync_ShouldWriteProblemDetailsWithExceptionMessageInDevelopment()
+    [Fact(DisplayName = "TryHandleAsync returns ProblemDetails for a bad HTTP request")]
+    public async Task TryHandleAsync_ShouldWriteProblemDetailsForBadHttpRequest()
     {
-        using var activity = new Activity("http-exception").Start();
+        using var activity = new Activity("bad-http-request").Start();
 
-        var logger = new TestLogger<ExceptionHandler>();
+        var logger = new TestLogger<BadHttpRequestExceptionHandler>();
         var environment = new TestHostEnvironment
         {
             EnvironmentName = Environments.Development
@@ -25,54 +26,71 @@ public sealed class ExceptionHandlerTests
 
         using var serviceProvider = CreateRequestServices();
         var httpContext = TestHttpContextFactory.CreateHttpContext(serviceProvider);
-        httpContext.Request.Method = HttpMethods.Get;
-        httpContext.Request.QueryString = new QueryString("?status=active");
+        var exception = new BadHttpRequestException(
+            "Failed to read the request body.",
+            StatusCodes.Status400BadRequest);
+        var handler = new BadHttpRequestExceptionHandler(logger, environment);
 
-        var exception = new InvalidOperationException("Development failure");
-        var handler = new ExceptionHandler(logger, environment);
-
-        var handled = await handler.TryHandleAsync(httpContext, exception, CancellationToken.None);
+        var handled = await handler.TryHandleAsync(
+            httpContext,
+            exception,
+            CancellationToken.None);
 
         handled.ShouldBeTrue();
-        httpContext.Response.StatusCode.ShouldBe(StatusCodes.Status500InternalServerError);
+        httpContext.Response.StatusCode.ShouldBe(StatusCodes.Status400BadRequest);
 
         using var document = ReadResponseBody(httpContext);
         var root = document.RootElement;
-        root.GetProperty("title").GetString().ShouldBe("Internal server error");
-        root.GetProperty("status").GetInt32().ShouldBe(StatusCodes.Status500InternalServerError);
-        root.GetProperty("detail").GetString().ShouldBe("Development failure");
+        root.GetProperty("title").GetString().ShouldBe("Bad Request");
+        root.GetProperty("status").GetInt32().ShouldBe(StatusCodes.Status400BadRequest);
+        root.GetProperty("detail").GetString().ShouldBe("Failed to read the request body.");
         root.GetProperty("traceId").GetString().ShouldBe(activity.Id);
         root.GetProperty("activityTraceId").GetString().ShouldBe(activity.TraceId.ToString());
 
         var logEntry = logger.Entries.ShouldHaveSingleItem();
-        logEntry.LogLevel.ShouldBe(Microsoft.Extensions.Logging.LogLevel.Error);
+        logEntry.LogLevel.ShouldBe(LogLevel.Warning);
         logEntry.Exception.ShouldBeSameAs(exception);
-        logEntry.Message.ShouldBe("Unhandled HTTP exception");
+        logEntry.Message.ShouldBe("Invalid HTTP request");
 
         var scopeValues = logger.Scopes
             .ShouldHaveSingleItem()
             .ShouldBeAssignableTo<IReadOnlyDictionary<string, object?>>()!;
 
         scopeValues["network.protocol.name"].ShouldBe("http");
-        scopeValues["http.request.method"].ShouldBe(HttpMethods.Get);
+        scopeValues["http.request.method"].ShouldBe(HttpMethods.Post);
         scopeValues["url.path"].ShouldBe("/orders");
-        scopeValues["url.query"].ShouldBe("?status=active");
+        scopeValues["url.query"].ShouldBe(string.Empty);
         scopeValues["http.route"].ShouldBe("/orders");
         scopeValues["aspnetcore.endpoint.display_name"].ShouldBe("Test endpoint");
         scopeValues["enduser.id"].ShouldBe("user-id");
         scopeValues["client.address"].ShouldBe("127.0.0.1");
         scopeValues["user_agent.original"].ShouldBe("UnitTest");
-        scopeValues.ContainsKey("TraceIdentifier").ShouldBeFalse();
-        scopeValues.ContainsKey("TraceId").ShouldBeFalse();
-        scopeValues.ContainsKey("SpanId").ShouldBeFalse();
     }
 
-    [Fact(DisplayName = "TryHandleAsync hides exception details outside Development")]
-    public async Task TryHandleAsync_ShouldHideExceptionMessageOutsideDevelopment()
+    [Fact(DisplayName = "TryHandleAsync ignores exceptions that are not bad HTTP requests")]
+    public async Task TryHandleAsync_ShouldIgnoreOtherExceptions()
     {
-        Activity.Current = null;
+        var logger = new TestLogger<BadHttpRequestExceptionHandler>();
+        var environment = new TestHostEnvironment();
+        var httpContext = TestHttpContextFactory.CreateMinimalHttpContext();
+        var handler = new BadHttpRequestExceptionHandler(logger, environment);
 
-        var logger = new TestLogger<ExceptionHandler>();
+        var handled = await handler.TryHandleAsync(
+            httpContext,
+            new InvalidOperationException("Unexpected failure"),
+            CancellationToken.None);
+
+        handled.ShouldBeFalse();
+        httpContext.Response.StatusCode.ShouldBe(StatusCodes.Status200OK);
+        httpContext.Response.Body.Length.ShouldBe(0);
+        logger.Entries.ShouldBeEmpty();
+        logger.Scopes.ShouldBeEmpty();
+    }
+
+    [Fact(DisplayName = "TryHandleAsync hides bad request details outside Development")]
+    public async Task TryHandleAsync_ShouldHideBadRequestDetailsOutsideDevelopment()
+    {
+        var logger = new TestLogger<BadHttpRequestExceptionHandler>();
         var environment = new TestHostEnvironment
         {
             EnvironmentName = Environments.Production
@@ -80,11 +98,11 @@ public sealed class ExceptionHandlerTests
 
         using var serviceProvider = CreateRequestServices();
         var httpContext = TestHttpContextFactory.CreateMinimalHttpContext(serviceProvider);
-        var handler = new ExceptionHandler(logger, environment);
+        var handler = new BadHttpRequestExceptionHandler(logger, environment);
 
         var handled = await handler.TryHandleAsync(
             httpContext,
-            new InvalidOperationException("Production failure"),
+            new BadHttpRequestException("Sensitive parser details"),
             CancellationToken.None);
 
         handled.ShouldBeTrue();
@@ -108,5 +126,4 @@ public sealed class ExceptionHandlerTests
 
         return JsonDocument.Parse(httpContext.Response.Body);
     }
-
 }

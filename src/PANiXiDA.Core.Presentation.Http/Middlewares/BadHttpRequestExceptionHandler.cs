@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -8,8 +9,8 @@ using PANiXiDA.Core.Presentation.Http.Logging;
 
 namespace PANiXiDA.Core.Presentation.Http.Middlewares;
 
-internal sealed class ExceptionHandler(
-    ILogger<ExceptionHandler> logger,
+internal sealed class BadHttpRequestExceptionHandler(
+    ILogger<BadHttpRequestExceptionHandler> logger,
     IHostEnvironment hostEnvironment) : IExceptionHandler
 {
     public async ValueTask<bool> TryHandleAsync(
@@ -17,19 +18,25 @@ internal sealed class ExceptionHandler(
         Exception exception,
         CancellationToken cancellationToken)
     {
-        using (logger.BeginScope(HttpRequestLogScope.Create(httpContext)))
+        if (exception is not BadHttpRequestException badHttpRequestException)
         {
-            logger.LogError(exception, "Unhandled HTTP exception");
+            return false;
         }
 
+        using (logger.BeginScope(HttpRequestLogScope.Create(httpContext)))
+        {
+            logger.LogWarning(exception, "Invalid HTTP request");
+        }
+
+        var statusCode = badHttpRequestException.StatusCode;
         var problemDetails = ExceptionProblemDetailsFactory.Create(
             httpContext,
             exception,
             hostEnvironment,
-            StatusCodes.Status500InternalServerError,
-            "Internal server error");
+            statusCode,
+            ReasonPhrases.GetReasonPhrase(statusCode));
 
-        httpContext.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        httpContext.Response.StatusCode = statusCode;
 
         await Results.Problem(problemDetails).ExecuteAsync(httpContext);
 

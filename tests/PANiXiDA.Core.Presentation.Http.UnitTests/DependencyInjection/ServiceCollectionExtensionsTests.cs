@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,6 +16,7 @@ using PANiXiDA.Core.Presentation.Http.UnitTests.Endpoints.Fixtures.Groups;
 
 using System.Net;
 using System.Reflection;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -286,6 +288,37 @@ public sealed class ServiceCollectionExtensionsTests
         content.ShouldNotContain(nameof(InvalidOperationException));
     }
 
+    [Fact(DisplayName = "UseHttp returns Bad Request when JSON body binding fails in Development")]
+    public async Task UseHttp_ShouldReturnBadRequestWhenJsonBodyBindingFailsInDevelopment()
+    {
+        await using var app = await CreateStartedApplicationAsync(
+            Environments.Development,
+            TestContext.Current.CancellationToken,
+            static application =>
+            {
+                application.MapPost(
+                    "/payload",
+                    static (RequestPayload payload) => Results.Ok(payload));
+            });
+        using var client = CreateClient(app);
+        using var requestContent = new StringContent(
+            """{"id":"invalid-guid"}""",
+            Encoding.UTF8,
+            "application/json");
+
+        using var response = await client.PostAsync(
+            "/payload",
+            requestContent,
+            TestContext.Current.CancellationToken);
+        var content = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        content.ShouldContain("Bad Request");
+        content.ShouldContain("Failed to read parameter");
+        content.ShouldNotContain("Internal server error");
+    }
+
     [Fact(DisplayName = "UseHttp uses ProblemDetails exception handler outside Development")]
     public async Task UseHttp_ShouldUseProblemDetailsExceptionHandlerOutsideDevelopment()
     {
@@ -382,6 +415,8 @@ public sealed class ServiceCollectionExtensionsTests
     }
 
     private sealed record TestPayload(int Count, TestStatus Status);
+
+    private sealed record RequestPayload(Guid Id);
 
     [JsonConverter(typeof(JsonStringEnumConverter<TestStatus>))]
     private enum TestStatus

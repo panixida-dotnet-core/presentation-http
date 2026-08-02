@@ -224,8 +224,9 @@ public static IResult CreateOrder()
 
 ## HTTP Error Mapping
 
-Unhandled exceptions are mapped to `ProblemDetails` in every environment.
-In `Development`, the response includes the exception message in `detail`.
+Invalid HTTP requests represented by `BadHttpRequestException`, including JSON body binding failures, preserve their framework status code and are mapped to `ProblemDetails`.
+Other unhandled exceptions are mapped to status 500 in every environment.
+In `Development`, both responses include the exception message in `detail`.
 
 | Error type | HTTP status | Title |
 | --- | ---: | --- |
