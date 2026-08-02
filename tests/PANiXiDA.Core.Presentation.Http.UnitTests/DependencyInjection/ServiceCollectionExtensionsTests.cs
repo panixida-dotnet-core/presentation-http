@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.AspNetCore.Http.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -14,6 +15,8 @@ using PANiXiDA.Core.Presentation.Http.UnitTests.Endpoints.Fixtures.Groups;
 
 using System.Net;
 using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace PANiXiDA.Core.Presentation.Http.UnitTests.DependencyInjection;
 
@@ -92,6 +95,59 @@ public sealed class ServiceCollectionExtensionsTests
         var result = services.AddHttp(configuration);
 
         result.ShouldBeSameAs(services);
+    }
+
+    [Fact(DisplayName = "AddHttp uses strict JSON number handling")]
+    public void AddHttp_ShouldUseStrictJsonNumberHandling()
+    {
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder().Build();
+
+        services.AddHttp(configuration);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var options = serviceProvider.GetRequiredService<IOptions<JsonOptions>>().Value;
+
+        options.SerializerOptions.NumberHandling.ShouldBe(JsonNumberHandling.Strict);
+    }
+
+    [Fact(DisplayName = "AddHttp rejects JSON numbers encoded as strings")]
+    public void AddHttp_ShouldRejectJsonNumbersEncodedAsStrings()
+    {
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder().Build();
+
+        services.AddHttp(configuration);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var options = serviceProvider.GetRequiredService<IOptions<JsonOptions>>().Value;
+
+        Should.Throw<JsonException>(() =>
+        {
+            JsonSerializer.Deserialize<TestPayload>(
+                """{"count":"1","status":"Active"}""",
+                options.SerializerOptions);
+        });
+    }
+
+    [Fact(DisplayName = "AddHttp preserves string enum deserialization")]
+    public void AddHttp_ShouldPreserveStringEnumDeserialization()
+    {
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder().Build();
+
+        services.AddHttp(configuration);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var options = serviceProvider.GetRequiredService<IOptions<JsonOptions>>().Value;
+
+        var payload = JsonSerializer.Deserialize<TestPayload>(
+            """{"count":1,"status":"Active"}""",
+            options.SerializerOptions);
+
+        payload.ShouldNotBeNull();
+        payload.Count.ShouldBe(1);
+        payload.Status.ShouldBe(TestStatus.Active);
     }
 
     [Fact(DisplayName = "AddHttp rejects a null module assembly collection")]
@@ -323,5 +379,13 @@ public sealed class ServiceCollectionExtensionsTests
         }
 
         return values;
+    }
+
+    private sealed record TestPayload(int Count, TestStatus Status);
+
+    [JsonConverter(typeof(JsonStringEnumConverter<TestStatus>))]
+    private enum TestStatus
+    {
+        Active
     }
 }

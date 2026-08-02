@@ -104,6 +104,32 @@ public sealed class OpenApiConfigurationTests
         content.ShouldContain("<title>Orders API Reference</title>");
     }
 
+    [Fact(DisplayName = "OpenAPI configuration emits strict numeric schemas")]
+    public async Task UseOpenApiConfiguration_ShouldEmitStrictNumericSchemas()
+    {
+        await using var app = await CreateStartedStrictSchemaApplicationAsync(
+            TestContext.Current.CancellationToken);
+        using var client = CreateClient(app);
+
+        using var response = await client.GetAsync(
+            "/openapi/v1.json",
+            TestContext.Current.CancellationToken);
+        var content = await response.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        using var document = JsonDocument.Parse(content);
+        var countSchema = document.RootElement
+            .GetProperty("components")
+            .GetProperty("schemas")
+            .GetProperty(nameof(NumericResponse))
+            .GetProperty("properties")
+            .GetProperty("count");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        countSchema.GetProperty("type").GetString().ShouldBe("integer");
+        countSchema.GetProperty("format").GetString().ShouldBe("int32");
+        countSchema.TryGetProperty("pattern", out _).ShouldBeFalse();
+    }
+
     [Fact(DisplayName = "OpenAPI configuration exposes separate documents and Scalar sources for HTTP modules")]
     public async Task UseOpenApiConfiguration_ShouldExposeSeparateModuleDocuments()
     {
@@ -226,6 +252,26 @@ public sealed class OpenApiConfigurationTests
         return app;
     }
 
+    private static async Task<WebApplication> CreateStartedStrictSchemaApplicationAsync(
+        CancellationToken cancellationToken)
+    {
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            EnvironmentName = Environments.Development
+        });
+
+        builder.WebHost.UseUrls("http://127.0.0.1:0");
+        builder.Services.AddHttp(builder.Configuration);
+
+        var app = builder.Build();
+        app.MapGet("/numeric", static () => new NumericResponse(Count: 1));
+        app.UseHttp();
+
+        await app.StartAsync(cancellationToken);
+
+        return app;
+    }
+
     private static Dictionary<string, string?> CreateModuleConfigurationValues(
         params (Assembly Assembly, string Name, string Title)[] modules)
     {
@@ -253,4 +299,6 @@ public sealed class OpenApiConfigurationTests
             BaseAddress = new Uri(address)
         };
     }
+
+    private sealed record NumericResponse(int Count);
 }
