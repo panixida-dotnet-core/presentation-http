@@ -1,9 +1,7 @@
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
 
 using System.Diagnostics;
-using System.Security.Claims;
 
 namespace PANiXiDA.Core.Presentation.Http.Middlewares;
 
@@ -14,24 +12,8 @@ internal sealed class LoggingMiddleware(
     public async Task InvokeAsync(HttpContext httpContext)
     {
         var startedAt = Stopwatch.GetTimestamp();
-        var endpoint = httpContext.GetEndpoint();
-        var route = endpoint is RouteEndpoint routeEndpoint
-            ? routeEndpoint.RoutePattern.RawText
-            : null;
 
-        var userId = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        using (logger.BeginScope(new Dictionary<string, object?>
-        {
-            ["network.protocol.name"] = "http",
-            ["http.request.method"] = httpContext.Request.Method,
-            ["url.path"] = httpContext.Request.Path.Value,
-            ["http.route"] = route,
-            ["aspnetcore.endpoint.display_name"] = endpoint?.DisplayName,
-            ["enduser.id"] = userId,
-            ["client.address"] = httpContext.Connection.RemoteIpAddress?.ToString(),
-            ["user_agent.original"] = httpContext.Request.Headers.UserAgent.ToString(),
-        }))
+        using (logger.BeginScope(HttpRequestLogScope.Create(httpContext)))
         {
             try
             {

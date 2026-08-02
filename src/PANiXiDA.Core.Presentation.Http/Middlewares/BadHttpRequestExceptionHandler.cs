@@ -1,13 +1,11 @@
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 using System.Diagnostics;
-using System.Security.Claims;
 
 namespace PANiXiDA.Core.Presentation.Http.Middlewares;
 
@@ -26,24 +24,8 @@ internal sealed class BadHttpRequestExceptionHandler(
         }
 
         var activity = Activity.Current;
-        var endpoint = httpContext.GetEndpoint();
-        var route = endpoint is RouteEndpoint routeEndpoint
-            ? routeEndpoint.RoutePattern.RawText
-            : null;
 
-        var userId = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        using (logger.BeginScope(new Dictionary<string, object?>
-        {
-            ["http.request.method"] = httpContext.Request.Method,
-            ["url.path"] = httpContext.Request.Path.Value,
-            ["url.query"] = httpContext.Request.QueryString.Value,
-            ["http.route"] = route,
-            ["aspnetcore.endpoint.display_name"] = endpoint?.DisplayName,
-            ["enduser.id"] = userId,
-            ["client.address"] = httpContext.Connection.RemoteIpAddress?.ToString(),
-            ["user_agent.original"] = httpContext.Request.Headers.UserAgent.ToString(),
-        }))
+        using (logger.BeginScope(HttpRequestLogScope.Create(httpContext)))
         {
             logger.LogWarning(exception, "Invalid HTTP request");
         }

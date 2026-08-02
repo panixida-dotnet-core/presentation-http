@@ -53,6 +53,7 @@ public sealed class ExceptionHandlerTests
             .ShouldHaveSingleItem()
             .ShouldBeAssignableTo<IReadOnlyDictionary<string, object?>>()!;
 
+        scopeValues["network.protocol.name"].ShouldBe("http");
         scopeValues["http.request.method"].ShouldBe(HttpMethods.Get);
         scopeValues["url.path"].ShouldBe("/orders");
         scopeValues["url.query"].ShouldBe("?status=active");
