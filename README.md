@@ -139,6 +139,21 @@ public sealed class OrdersEndpointGroup : IEndpointGroup
 
 The final route prefix is `/api/v{version}/orders`.
 
+Groups that require a custom root route can map their endpoints through an explicit `RouteGroupBuilder`.
+The registered HTTP module metadata is attached to custom groups as well, so their endpoints remain available in the corresponding module OpenAPI document.
+
+```csharp
+public void Map(IEndpointRouteBuilder endpoints)
+{
+    var group = endpoints.MapGroup("/connect")
+        .WithTags(Name);
+
+    EndpointMapper.MapGroupEndpoints<OAuthEndpointGroup>(
+        group,
+        endpoints.ServiceProvider);
+}
+```
+
 ## Endpoints
 
 An endpoint implements `IEndpoint<TGroup>`, where `TGroup` is the endpoint group it belongs to.

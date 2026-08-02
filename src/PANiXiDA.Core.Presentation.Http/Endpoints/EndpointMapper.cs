@@ -39,21 +39,13 @@ public static class EndpointMapper
         group.WithApiVersionSet(apiVersionSet);
         group.MapToApiVersion(apiVersion);
 
-        var moduleRegistry = endpoints.ServiceProvider.GetService<HttpModuleRegistry>();
-
-        if (moduleRegistry is not null &&
-            moduleRegistry.TryGetModule(typeof(TGroup).Assembly, out var module))
-        {
-            group.WithMetadata(module);
-        }
-
         MapGroupEndpoints<TGroup>(group, endpoints.ServiceProvider);
 
         return group;
     }
 
     /// <summary>
-    /// Finds endpoints for <typeparamref name="TGroup"/>, creates them through the service provider, and maps them to the specified route group.
+    /// Attaches registered HTTP module metadata to the specified route group, finds endpoints for <typeparamref name="TGroup"/>, creates them through the service provider, and maps them to the group.
     /// </summary>
     /// <typeparam name="TGroup">The endpoint group type.</typeparam>
     /// <param name="group">The route group to map endpoints to.</param>
@@ -63,6 +55,14 @@ public static class EndpointMapper
         IServiceProvider serviceProvider)
         where TGroup : IEndpointGroup
     {
+        var moduleRegistry = serviceProvider.GetService<HttpModuleRegistry>();
+
+        if (moduleRegistry is not null &&
+            moduleRegistry.TryGetModule(typeof(TGroup).Assembly, out var module))
+        {
+            group.WithMetadata(module);
+        }
+
         var endpointTypes = GetEndpointTypes(typeof(TGroup).Assembly, typeof(TGroup));
         var endpoints = new List<IEndpoint>();
 

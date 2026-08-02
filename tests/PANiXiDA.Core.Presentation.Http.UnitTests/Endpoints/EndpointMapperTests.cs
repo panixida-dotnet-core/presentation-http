@@ -105,6 +105,33 @@ public sealed class EndpointMapperTests
         metadata.PresentationAssembly.ShouldBeSameAs(moduleAssembly);
     }
 
+    [Fact(DisplayName = "MapGroupEndpoints attaches the HTTP module to custom route groups")]
+    public void MapGroupEndpoints_ShouldAttachHttpModuleToCustomRouteGroups()
+    {
+        var moduleAssembly = typeof(OrderedEndpointGroup).Assembly;
+        var assemblyName = moduleAssembly.GetName().Name;
+        var builder = WebApplication.CreateBuilder();
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            [$"HttpModules:{assemblyName}:Name"] = "tests",
+            [$"HttpModules:{assemblyName}:Title"] = "Test endpoints"
+        });
+        builder.Services.AddHttp(builder.Configuration, moduleAssembly);
+
+        using var app = builder.Build();
+        var group = app.MapGroup("/custom");
+
+        EndpointMapper.MapGroupEndpoints<OrderedEndpointGroup>(group, app.Services);
+
+        var firstEndpoint = GetRouteEndpoint(app, "/custom/first");
+        var metadata = firstEndpoint.Metadata.GetMetadata<HttpModule>();
+
+        metadata.ShouldNotBeNull();
+        metadata.Name.ShouldBe("tests");
+        metadata.Title.ShouldBe("Test endpoints");
+        metadata.PresentationAssembly.ShouldBeSameAs(moduleAssembly);
+    }
+
     private static List<string?> GetRoutePatterns(WebApplication app)
     {
         return [.. ((IEndpointRouteBuilder)app).DataSources
