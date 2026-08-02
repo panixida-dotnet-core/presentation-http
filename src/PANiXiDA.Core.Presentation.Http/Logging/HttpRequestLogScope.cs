@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Routing;
 
 using System.Security.Claims;
 
-namespace PANiXiDA.Core.Presentation.Http.Middlewares;
+namespace PANiXiDA.Core.Presentation.Http.Logging;
 
 internal static class HttpRequestLogScope
 {

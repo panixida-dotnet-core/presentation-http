@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.Http;
 
-using PANiXiDA.Core.Presentation.Http.Middlewares;
+using PANiXiDA.Core.Presentation.Http.Logging;
 using PANiXiDA.Core.Presentation.Http.UnitTests.Support;
 
-namespace PANiXiDA.Core.Presentation.Http.UnitTests.Middlewares;
+namespace PANiXiDA.Core.Presentation.Http.UnitTests.Logging;
 
 public sealed class HttpRequestLogScopeTests
 {

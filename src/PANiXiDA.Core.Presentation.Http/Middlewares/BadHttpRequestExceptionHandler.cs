@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
+using PANiXiDA.Core.Presentation.Http.Logging;
+
 using System.Diagnostics;
 
 namespace PANiXiDA.Core.Presentation.Http.Middlewares;

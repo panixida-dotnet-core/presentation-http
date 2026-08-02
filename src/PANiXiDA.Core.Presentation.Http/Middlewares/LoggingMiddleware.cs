@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 
+using PANiXiDA.Core.Presentation.Http.Logging;
+
 using System.Diagnostics;
 
 namespace PANiXiDA.Core.Presentation.Http.Middlewares;
