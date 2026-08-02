@@ -9,11 +9,11 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 using PANiXiDA.Core.Presentation.Http.DependencyInjection;
-using PANiXiDA.Core.Presentation.Http.Modularity;
 using PANiXiDA.Core.Presentation.Http.UnitTests.Endpoints;
 using PANiXiDA.Core.Presentation.Http.UnitTests.Endpoints.Fixtures.Groups;
 
 using System.Net;
+using System.Reflection;
 
 namespace PANiXiDA.Core.Presentation.Http.UnitTests.DependencyInjection;
 
@@ -94,19 +94,34 @@ public sealed class ServiceCollectionExtensionsTests
         result.ShouldBeSameAs(services);
     }
 
-    [Fact(DisplayName = "AddHttp rejects null values in the module collection")]
-    public void AddHttp_ShouldRejectNullModule()
+    [Fact(DisplayName = "AddHttp rejects a null module assembly collection")]
+    public void AddHttp_ShouldRejectNullModuleAssemblyCollection()
     {
         var services = new ServiceCollection();
         var configuration = new ConfigurationBuilder().Build();
-        HttpModule[] modules = [null!];
+        Assembly[] moduleAssemblies = null!;
+
+        var exception = Should.Throw<ArgumentNullException>(() =>
+        {
+            services.AddHttp(configuration, moduleAssemblies);
+        });
+
+        exception.ParamName.ShouldBe("moduleAssemblies");
+    }
+
+    [Fact(DisplayName = "AddHttp rejects null values in the module assembly collection")]
+    public void AddHttp_ShouldRejectNullModuleAssembly()
+    {
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder().Build();
+        Assembly[] moduleAssemblies = [null!];
 
         var exception = Should.Throw<ArgumentException>(() =>
         {
-            services.AddHttp(configuration, modules);
+            services.AddHttp(configuration, moduleAssemblies);
         });
 
-        exception.ParamName.ShouldBe("modules");
+        exception.ParamName.ShouldBe("presentationAssemblies");
         exception.Message.ShouldContain("cannot contain null values");
     }
 
@@ -114,20 +129,20 @@ public sealed class ServiceCollectionExtensionsTests
     public void AddHttp_ShouldRejectDuplicateModuleDocumentNames()
     {
         var services = new ServiceCollection();
-        var configuration = new ConfigurationBuilder().Build();
-        var firstModule = new HttpModule(
-            "identity",
-            typeof(ADiscoveredEndpointGroup).Assembly);
-        var secondModule = new HttpModule(
-            "IDENTITY",
-            typeof(ServiceCollectionExtensions).Assembly);
+        var firstAssembly = typeof(ADiscoveredEndpointGroup).Assembly;
+        var secondAssembly = typeof(ServiceCollectionExtensions).Assembly;
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(CreateModuleConfigurationValues(
+                (firstAssembly, "identity", "Identity API"),
+                (secondAssembly, "IDENTITY", "Duplicate Identity API")))
+            .Build();
 
         var exception = Should.Throw<ArgumentException>(() =>
         {
-            services.AddHttp(configuration, firstModule, secondModule);
+            services.AddHttp(configuration, firstAssembly, secondAssembly);
         });
 
-        exception.ParamName.ShouldBe("modules");
+        exception.ParamName.ShouldBe("presentationAssemblies");
         exception.Message.ShouldContain("IDENTITY");
     }
 
@@ -135,17 +150,18 @@ public sealed class ServiceCollectionExtensionsTests
     public void AddHttp_ShouldRejectDuplicateModuleAssemblies()
     {
         var services = new ServiceCollection();
-        var configuration = new ConfigurationBuilder().Build();
         var assembly = typeof(ADiscoveredEndpointGroup).Assembly;
-        var firstModule = new HttpModule("identity", assembly);
-        var secondModule = new HttpModule("compendium", assembly);
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(CreateModuleConfigurationValues(
+                (assembly, "identity", "Identity API")))
+            .Build();
 
         var exception = Should.Throw<ArgumentException>(() =>
         {
-            services.AddHttp(configuration, firstModule, secondModule);
+            services.AddHttp(configuration, assembly, assembly);
         });
 
-        exception.ParamName.ShouldBe("modules");
+        exception.ParamName.ShouldBe("presentationAssemblies");
         exception.Message.ShouldContain(assembly.FullName!);
     }
 
@@ -175,20 +191,19 @@ public sealed class ServiceCollectionExtensionsTests
     {
         EndpointMappingRecorder.Clear();
 
-        var module = new HttpModule(
-            "tests",
-            "Test endpoints",
-            typeof(ADiscoveredEndpointGroup).Assembly);
+        var moduleAssembly = typeof(ADiscoveredEndpointGroup).Assembly;
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
             EnvironmentName = Environments.Production
         });
+        builder.Configuration.AddInMemoryCollection(CreateModuleConfigurationValues(
+            (moduleAssembly, "tests", "Test endpoints")));
 
-        builder.Services.AddHttp(builder.Configuration, module);
+        builder.Services.AddHttp(builder.Configuration, moduleAssembly);
 
         using var app = builder.Build();
 
-        var result = app.UseHttp(module.PresentationAssembly);
+        var result = app.UseHttp(moduleAssembly);
 
         result.ShouldBeSameAs(app);
         EndpointMappingRecorder.Entries.Count(
@@ -293,5 +308,20 @@ public sealed class ServiceCollectionExtensionsTests
         {
             BaseAddress = new Uri(address)
         };
+    }
+
+    private static Dictionary<string, string?> CreateModuleConfigurationValues(
+        params (Assembly Assembly, string Name, string Title)[] modules)
+    {
+        var values = new Dictionary<string, string?>();
+
+        foreach (var module in modules)
+        {
+            var assemblyName = module.Assembly.GetName().Name;
+            values[$"HttpModules:{assemblyName}:Name"] = module.Name;
+            values[$"HttpModules:{assemblyName}:Title"] = module.Title;
+        }
+
+        return values;
     }
 }

@@ -16,7 +16,7 @@ It provides common Minimal API endpoint conventions, API versioning, OpenAPI set
 
 - `AddHttp` registers the default HTTP presentation services.
 - `UseHttp` adds the default middleware pipeline and maps discovered endpoint groups.
-- `HttpModule` can map a presentation assembly to a separate OpenAPI document and Scalar source.
+- Module assemblies can be mapped to separate OpenAPI documents and Scalar sources through the `HttpModules` configuration section.
 - Health checks are registered by `AddHttp` and exposed at `/health` by `UseHttp`.
 - `IEndpointGroup` defines route, resource name, and API version metadata for Minimal API endpoint groups.
 - `IEndpoint<TGroup>` defines route, name, and summary metadata for endpoints that belong to a specific group.
@@ -235,31 +235,42 @@ OpenAPI registration also enables Scalar transformers for Scalar-specific docume
 ### Module documents
 
 Applications composed from multiple presentation modules can expose one OpenAPI document per module.
-Register each module once with a unique document name, display title, and presentation assembly.
+Register the presentation assemblies in code and configure their document names and display titles in `appsettings.json`.
 `UseHttp` automatically maps endpoint groups from registered module assemblies.
 
 ```csharp
 using PANiXiDA.Core.Presentation.Http.DependencyInjection;
-using PANiXiDA.Core.Presentation.Http.Modularity;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddHttp(
     builder.Configuration,
-    new HttpModule(
-        "identity",
-        "Identity API",
-        typeof(IdentityPresentationAssembly).Assembly),
-    new HttpModule(
-        "compendium",
-        "Compendium API",
-        typeof(CompendiumPresentationAssembly).Assembly));
+    typeof(IdentityPresentationAssembly).Assembly,
+    typeof(CompendiumPresentationAssembly).Assembly);
 
 var app = builder.Build();
 
 app.UseHttp();
 
 app.Run();
+```
+
+Each key under `HttpModules` must match the simple name returned by `Assembly.GetName().Name`.
+Both `Name` and `Title` are required for every registered module assembly.
+
+```json
+{
+  "HttpModules": {
+    "PANiXiDA.TacticalHeroes.Identity.Presentation": {
+      "Name": "identity",
+      "Title": "Identity API"
+    },
+    "PANiXiDA.TacticalHeroes.Compendium.Presentation": {
+      "Name": "compendium",
+      "Title": "Compendium API"
+    }
+  }
+}
 ```
 
 This configuration exposes:

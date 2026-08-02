@@ -1,43 +1,66 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 
+using Microsoft.Extensions.Configuration;
+
 namespace PANiXiDA.Core.Presentation.Http.Modularity;
 
 internal sealed class HttpModuleRegistry
 {
+    private const string ConfigurationSectionName = "HttpModules";
+
     private readonly Dictionary<Assembly, HttpModule> modulesByAssembly;
 
-    internal HttpModuleRegistry(IReadOnlyCollection<HttpModule> modules)
+    internal HttpModuleRegistry(
+        IConfiguration configuration,
+        IReadOnlyCollection<Assembly> presentationAssemblies)
     {
-        ArgumentNullException.ThrowIfNull(modules);
+        ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(presentationAssemblies);
 
         var documentNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         modulesByAssembly = [];
-        var registeredModules = new List<HttpModule>(modules.Count);
+        var registeredModules = new List<HttpModule>(presentationAssemblies.Count);
+        var modulesSection = configuration.GetSection(ConfigurationSectionName);
 
-        foreach (var module in modules)
+        foreach (var presentationAssembly in presentationAssemblies)
         {
-            if (module is null)
+            if (presentationAssembly is null)
             {
                 throw new ArgumentException(
-                    "HTTP modules cannot contain null values.",
-                    nameof(modules));
+                    "HTTP module assemblies cannot contain null values.",
+                    nameof(presentationAssemblies));
             }
 
-            if (!documentNames.Add(module.Name))
+            if (modulesByAssembly.ContainsKey(presentationAssembly))
             {
                 throw new ArgumentException(
-                    $"The OpenAPI document name '{module.Name}' is already registered.",
-                    nameof(modules));
+                    $"The presentation assembly '{presentationAssembly.FullName}' is already registered for another HTTP module.",
+                    nameof(presentationAssemblies));
             }
 
-            if (!modulesByAssembly.TryAdd(module.PresentationAssembly, module))
+            var assemblyName = presentationAssembly.GetName().Name!;
+            var moduleSection = modulesSection.GetSection(assemblyName);
+
+            if (!moduleSection.Exists())
+            {
+                throw new InvalidOperationException(
+                    $"Configuration section '{moduleSection.Path}' is required.");
+            }
+
+            var name = GetRequiredValue(moduleSection, nameof(HttpModule.Name));
+            var title = GetRequiredValue(moduleSection, nameof(HttpModule.Title));
+
+            if (!documentNames.Add(name))
             {
                 throw new ArgumentException(
-                    $"The presentation assembly '{module.PresentationAssembly.FullName}' is already registered for another HTTP module.",
-                    nameof(modules));
+                    $"The OpenAPI document name '{name}' is already registered.",
+                    nameof(presentationAssemblies));
             }
 
+            var module = new HttpModule(name, title, presentationAssembly);
+
+            modulesByAssembly.Add(presentationAssembly, module);
             registeredModules.Add(module);
         }
 
@@ -51,5 +74,20 @@ internal sealed class HttpModuleRegistry
         [NotNullWhen(true)] out HttpModule? module)
     {
         return modulesByAssembly.TryGetValue(presentationAssembly, out module);
+    }
+
+    private static string GetRequiredValue(
+        IConfigurationSection section,
+        string key)
+    {
+        var value = section[key];
+
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            throw new InvalidOperationException(
+                $"Configuration value '{section.Path}:{key}' is required.");
+        }
+
+        return value;
     }
 }

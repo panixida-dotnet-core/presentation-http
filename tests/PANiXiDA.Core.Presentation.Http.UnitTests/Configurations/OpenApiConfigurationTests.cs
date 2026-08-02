@@ -11,10 +11,10 @@ using Microsoft.Extensions.Options;
 
 using PANiXiDA.Core.Presentation.Http.Configurations;
 using PANiXiDA.Core.Presentation.Http.DependencyInjection;
-using PANiXiDA.Core.Presentation.Http.Modularity;
 using PANiXiDA.Core.Presentation.Http.UnitTests.Endpoints.Fixtures.Groups;
 
 using System.Net;
+using System.Reflection;
 using System.Text.Json;
 
 namespace PANiXiDA.Core.Presentation.Http.UnitTests.Configurations;
@@ -107,17 +107,15 @@ public sealed class OpenApiConfigurationTests
     [Fact(DisplayName = "OpenAPI configuration exposes separate documents and Scalar sources for HTTP modules")]
     public async Task UseOpenApiConfiguration_ShouldExposeSeparateModuleDocuments()
     {
-        var documentedModule = new HttpModule(
-            "tests",
-            "Test endpoints",
-            typeof(OrderedEndpointGroup).Assembly);
-        var emptyModule = new HttpModule(
-            "core",
-            "Core endpoints",
-            typeof(OpenApiConfiguration).Assembly);
+        var documentedModuleAssembly = typeof(OrderedEndpointGroup).Assembly;
+        var emptyModuleAssembly = typeof(OpenApiConfiguration).Assembly;
+        var configurationValues = CreateModuleConfigurationValues(
+            (documentedModuleAssembly, "tests", "Test endpoints"),
+            (emptyModuleAssembly, "core", "Core endpoints"));
 
         await using var app = await CreateStartedModuleApplicationAsync(
-            [documentedModule, emptyModule],
+            configurationValues,
+            [documentedModuleAssembly, emptyModuleAssembly],
             TestContext.Current.CancellationToken);
         using var client = CreateClient(app);
 
@@ -207,7 +205,8 @@ public sealed class OpenApiConfigurationTests
     }
 
     private static async Task<WebApplication> CreateStartedModuleApplicationAsync(
-        HttpModule[] modules,
+        Dictionary<string, string?> configurationValues,
+        Assembly[] moduleAssemblies,
         CancellationToken cancellationToken)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
@@ -216,7 +215,8 @@ public sealed class OpenApiConfigurationTests
         });
 
         builder.WebHost.UseUrls("http://127.0.0.1:0");
-        builder.Services.AddHttp(builder.Configuration, modules);
+        builder.Configuration.AddInMemoryCollection(configurationValues);
+        builder.Services.AddHttp(builder.Configuration, moduleAssemblies);
 
         var app = builder.Build();
         app.UseHttp();
@@ -224,6 +224,21 @@ public sealed class OpenApiConfigurationTests
         await app.StartAsync(cancellationToken);
 
         return app;
+    }
+
+    private static Dictionary<string, string?> CreateModuleConfigurationValues(
+        params (Assembly Assembly, string Name, string Title)[] modules)
+    {
+        var values = new Dictionary<string, string?>();
+
+        foreach (var module in modules)
+        {
+            var assemblyName = module.Assembly.GetName().Name;
+            values[$"HttpModules:{assemblyName}:Name"] = module.Name;
+            values[$"HttpModules:{assemblyName}:Title"] = module.Title;
+        }
+
+        return values;
     }
 
     private static HttpClient CreateClient(WebApplication app)

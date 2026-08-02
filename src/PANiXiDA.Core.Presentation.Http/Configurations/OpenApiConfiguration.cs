@@ -27,14 +27,14 @@ internal static class OpenApiConfiguration
         }
         else
         {
-            foreach (var module in modules)
+            foreach (var moduleName in modules.Select(static module => module.Name))
             {
-                services.AddOpenApi(module.Name, options =>
+                services.AddOpenApi(moduleName, options =>
                 {
                     options.AddScalarTransformers();
                     options.ShouldInclude = description =>
                     {
-                        return ShouldInclude(description, module.Name);
+                        return ShouldInclude(description, moduleName);
                     };
                 });
             }

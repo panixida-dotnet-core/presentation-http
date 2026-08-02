@@ -33,25 +33,25 @@ public static class ServiceCollectionExtensions
     /// Registers the default HTTP presentation services and separate OpenAPI documents for the specified modules.
     /// </summary>
     /// <param name="services">The application service collection.</param>
-    /// <param name="configuration">The application configuration. The standard <c>ForwardedHeaders</c> section is used when present.</param>
-    /// <param name="modules">The modules to map and expose as separate OpenAPI documents.</param>
+    /// <param name="configuration">The application configuration. Module document names and titles are read from the <c>HttpModules</c> section by presentation assembly name.</param>
+    /// <param name="moduleAssemblies">The presentation assemblies to map and expose as separate OpenAPI documents.</param>
     /// <returns>The original service collection for further configuration.</returns>
     public static IServiceCollection AddHttp(
         this IServiceCollection services,
         IConfiguration configuration,
-        params HttpModule[] modules)
+        params Assembly[] moduleAssemblies)
     {
-        ArgumentNullException.ThrowIfNull(modules);
+        ArgumentNullException.ThrowIfNull(moduleAssemblies);
 
-        return AddHttpCore(services, configuration, modules);
+        return AddHttpCore(services, configuration, moduleAssemblies);
     }
 
     private static IServiceCollection AddHttpCore(
         IServiceCollection services,
         IConfiguration configuration,
-        IReadOnlyCollection<HttpModule> modules)
+        IReadOnlyCollection<Assembly> moduleAssemblies)
     {
-        var moduleRegistry = new HttpModuleRegistry(modules);
+        var moduleRegistry = new HttpModuleRegistry(configuration, moduleAssemblies);
 
         services.AddSingleton(moduleRegistry);
         services.AddForwardedHeadersConfiguration(configuration);
