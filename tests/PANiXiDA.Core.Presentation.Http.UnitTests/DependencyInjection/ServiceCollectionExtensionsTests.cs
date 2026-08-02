@@ -13,6 +13,7 @@ using PANiXiDA.Core.Presentation.Http.UnitTests.Endpoints;
 using PANiXiDA.Core.Presentation.Http.UnitTests.Endpoints.Fixtures.Groups;
 
 using System.Net;
+using System.Reflection;
 
 namespace PANiXiDA.Core.Presentation.Http.UnitTests.DependencyInjection;
 
@@ -93,6 +94,77 @@ public sealed class ServiceCollectionExtensionsTests
         result.ShouldBeSameAs(services);
     }
 
+    [Fact(DisplayName = "AddHttp rejects a null module assembly collection")]
+    public void AddHttp_ShouldRejectNullModuleAssemblyCollection()
+    {
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder().Build();
+        Assembly[] moduleAssemblies = null!;
+
+        var exception = Should.Throw<ArgumentNullException>(() =>
+        {
+            services.AddHttp(configuration, moduleAssemblies);
+        });
+
+        exception.ParamName.ShouldBe("moduleAssemblies");
+    }
+
+    [Fact(DisplayName = "AddHttp rejects null values in the module assembly collection")]
+    public void AddHttp_ShouldRejectNullModuleAssembly()
+    {
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder().Build();
+        Assembly[] moduleAssemblies = [null!];
+
+        var exception = Should.Throw<ArgumentException>(() =>
+        {
+            services.AddHttp(configuration, moduleAssemblies);
+        });
+
+        exception.ParamName.ShouldBe("presentationAssemblies");
+        exception.Message.ShouldContain("cannot contain null values");
+    }
+
+    [Fact(DisplayName = "AddHttp rejects duplicate module document names")]
+    public void AddHttp_ShouldRejectDuplicateModuleDocumentNames()
+    {
+        var services = new ServiceCollection();
+        var firstAssembly = typeof(ADiscoveredEndpointGroup).Assembly;
+        var secondAssembly = typeof(ServiceCollectionExtensions).Assembly;
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(CreateModuleConfigurationValues(
+                (firstAssembly, "identity", "Identity API"),
+                (secondAssembly, "IDENTITY", "Duplicate Identity API")))
+            .Build();
+
+        var exception = Should.Throw<ArgumentException>(() =>
+        {
+            services.AddHttp(configuration, firstAssembly, secondAssembly);
+        });
+
+        exception.ParamName.ShouldBe("presentationAssemblies");
+        exception.Message.ShouldContain("IDENTITY");
+    }
+
+    [Fact(DisplayName = "AddHttp rejects a presentation assembly assigned to multiple modules")]
+    public void AddHttp_ShouldRejectDuplicateModuleAssemblies()
+    {
+        var services = new ServiceCollection();
+        var assembly = typeof(ADiscoveredEndpointGroup).Assembly;
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(CreateModuleConfigurationValues(
+                (assembly, "identity", "Identity API")))
+            .Build();
+
+        var exception = Should.Throw<ArgumentException>(() =>
+        {
+            services.AddHttp(configuration, assembly, assembly);
+        });
+
+        exception.ParamName.ShouldBe("presentationAssemblies");
+        exception.Message.ShouldContain(assembly.FullName!);
+    }
+
     [Fact(DisplayName = "UseHttp adds middleware and maps groups from the provided assemblies")]
     public void UseHttp_ShouldReturnSameApplicationAndMapEndpointGroups()
     {
@@ -112,6 +184,32 @@ public sealed class ServiceCollectionExtensionsTests
         result.ShouldBeSameAs(app);
         EndpointMappingRecorder.Entries.ShouldContain(nameof(ADiscoveredEndpointGroup));
         EndpointMappingRecorder.Entries.ShouldContain(nameof(BDiscoveredEndpointGroup));
+    }
+
+    [Fact(DisplayName = "UseHttp maps a registered module assembly only once")]
+    public void UseHttp_ShouldMapRegisteredHttpModuleAssemblyOnce()
+    {
+        EndpointMappingRecorder.Clear();
+
+        var moduleAssembly = typeof(ADiscoveredEndpointGroup).Assembly;
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            EnvironmentName = Environments.Production
+        });
+        builder.Configuration.AddInMemoryCollection(CreateModuleConfigurationValues(
+            (moduleAssembly, "tests", "Test endpoints")));
+
+        builder.Services.AddHttp(builder.Configuration, moduleAssembly);
+
+        using var app = builder.Build();
+
+        var result = app.UseHttp(moduleAssembly);
+
+        result.ShouldBeSameAs(app);
+        EndpointMappingRecorder.Entries.Count(
+            entry => entry == nameof(ADiscoveredEndpointGroup)).ShouldBe(1);
+        EndpointMappingRecorder.Entries.Count(
+            entry => entry == nameof(BDiscoveredEndpointGroup)).ShouldBe(1);
     }
 
     [Fact(DisplayName = "UseHttp uses ProblemDetails exception handler in Development")]
@@ -210,5 +308,20 @@ public sealed class ServiceCollectionExtensionsTests
         {
             BaseAddress = new Uri(address)
         };
+    }
+
+    private static Dictionary<string, string?> CreateModuleConfigurationValues(
+        params (Assembly Assembly, string Name, string Title)[] modules)
+    {
+        var values = new Dictionary<string, string?>();
+
+        foreach (var module in modules)
+        {
+            var assemblyName = module.Assembly.GetName().Name;
+            values[$"HttpModules:{assemblyName}:Name"] = module.Name;
+            values[$"HttpModules:{assemblyName}:Title"] = module.Title;
+        }
+
+        return values;
     }
 }

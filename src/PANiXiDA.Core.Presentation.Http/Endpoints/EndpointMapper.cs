@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 
+using PANiXiDA.Core.Presentation.Http.Modularity;
+
 using System.Reflection;
 
 namespace PANiXiDA.Core.Presentation.Http.Endpoints;
@@ -36,6 +38,14 @@ public static class EndpointMapper
         group.WithTags(endpointGroup.Name);
         group.WithApiVersionSet(apiVersionSet);
         group.MapToApiVersion(apiVersion);
+
+        var moduleRegistry = endpoints.ServiceProvider.GetService<HttpModuleRegistry>();
+
+        if (moduleRegistry is not null &&
+            moduleRegistry.TryGetModule(typeof(TGroup).Assembly, out var module))
+        {
+            group.WithMetadata(module);
+        }
 
         MapGroupEndpoints<TGroup>(group, endpoints.ServiceProvider);
 
