@@ -365,7 +365,7 @@ The source files under `src/PANiXiDA.Core.Presentation.Http` are covered by unit
 
 ### Continuous integration
 
-Pull requests from branches in this repository run formatting, tests, and
+Every pull request and push to `main` runs formatting, tests, and mandatory
 SonarQube analysis. Publishing from `main` starts only after the SonarQube
 Quality Gate succeeds.
 
@@ -373,9 +373,7 @@ Before enabling this workflow, add the repository to the
 [shared SonarQube inventory](https://github.com/panixida-infrastructure/core-platform/blob/main/inventory/sonarqube/repositories.json).
 Reconciliation provisions the `SONAR_PROJECT_KEY` repository variable and the
 `SONAR_TOKEN` repository secret; `SONAR_HOST_URL` is configured at the
-organization level. GitHub does not expose repository secrets to pull requests
-from forks, so SonarQube analysis is skipped for those pull requests while
-formatting and tests continue to run.
+organization level.
 
 ## Package Contents
 
