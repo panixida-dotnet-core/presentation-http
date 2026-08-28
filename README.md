@@ -363,6 +363,12 @@ dotnet test --configuration Release -- --coverage --coverage-output coverage.xml
 
 The source files under `src/PANiXiDA.Core.Presentation.Http` are covered by unit tests. Coverage excludes generated files under `obj/` from ASP.NET Core and validation source generators.
 
+### Continuous integration
+
+Every pull request and push to `main` runs formatting, tests, and mandatory
+SonarQube analysis. Publishing from `main` starts only after the SonarQube
+Quality Gate succeeds.
+
 ## Package Contents
 
 The NuGet package includes:
