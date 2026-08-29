@@ -68,7 +68,7 @@ public sealed class LoggingMiddlewareTests
 
         var middleware = new LoggingMiddleware(next, logger);
 
-        var act = async () => await middleware.InvokeAsync(httpContext);
+        async Task act() => await middleware.InvokeAsync(httpContext);
 
         var thrownException = await Should.ThrowAsync<InvalidOperationException>(act);
 
