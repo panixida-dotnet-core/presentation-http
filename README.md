@@ -255,6 +255,27 @@ In `Development`, `UseHttp` exposes:
 
 OpenAPI registration also enables Scalar transformers for Scalar-specific document extensions.
 
+### Dynamic sorting
+
+Accept `SortingParameters` directly with `[AsParameters]` and pass it to the application layer:
+
+```csharp
+using Microsoft.AspNetCore.Http;
+using PANiXiDA.Core.Application.Querying.Sorting;
+
+app.MapGet("/users", ([AsParameters] SortingParameters sorting) =>
+{
+    return TypedResults.Ok(sorting.Fields);
+});
+```
+
+Requests use repeated query parameters: `?Fields=name:desc&Fields=department.name:asc`.
+Omitting `Fields` produces empty sorting. Directions default to `asc`.
+
+`AddHttp` describes sorting as an optional string array with `style: form` and `explode: true`
+in every OpenAPI document. Swagger, Scalar, and generated clients can send the repeated values;
+client generators expose `Fields` as a string collection. JSON request and response schemas remain unchanged.
+
 ### Module documents
 
 Applications composed from multiple presentation modules can expose one OpenAPI document per module.
