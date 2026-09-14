@@ -23,6 +23,7 @@
         <PackageReference Include="Nerdbank.GitVersioning">
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
+        <PackageReference Include="PANiXiDA.Core.Application" />
         <PackageReference Include="PANiXiDA.Core.ResultPattern" />
         <PackageReference Include="Scalar.AspNetCore" />
         <PackageReference Include="Scalar.AspNetCore.Microsoft" />

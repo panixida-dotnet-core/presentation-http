@@ -6,6 +6,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 using PANiXiDA.Core.Presentation.Http.Modularity;
+using PANiXiDA.Core.Presentation.Http.Transformers;
 
 using Scalar.AspNetCore;
 
@@ -23,6 +24,7 @@ internal static class OpenApiConfiguration
             services.AddOpenApi(options =>
             {
                 options.AddScalarTransformers();
+                options.AddOperationTransformer<SortFieldArrayOpenApiOperationTransformer>();
             });
         }
         else
@@ -32,6 +34,7 @@ internal static class OpenApiConfiguration
                 services.AddOpenApi(moduleName, options =>
                 {
                     options.AddScalarTransformers();
+                    options.AddOperationTransformer<SortFieldArrayOpenApiOperationTransformer>();
                     options.ShouldInclude = description =>
                     {
                         return ShouldInclude(description, moduleName);
