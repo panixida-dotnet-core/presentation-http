@@ -46,28 +46,6 @@ jobs:
             - name: Run Native AOT smoke tests
               run: '"${{ runner.temp }}/http-aot/PANiXiDA.Core.Presentation.Http.AotSmoke"'
 
-    sonar-details:
-        if: ${{ failure() && needs.sonar.result == 'failure' }}
-        needs: sonar
-        runs-on: ubuntu-latest
-        steps:
-            - name: Report failed Quality Gate conditions
-              env:
-                  SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
-                  SONAR_PROJECT_KEY: ${{ vars.SONAR_PROJECT_KEY }}
-                  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-              run: |
-                  curl --fail --silent --show-error --user "${SONAR_TOKEN}:" \
-                    --get "${SONAR_HOST_URL}/api/qualitygates/project_status" \
-                    --data-urlencode "projectKey=${SONAR_PROJECT_KEY}" \
-                    | jq '.projectStatus | {status, conditions}'
-                  curl --fail --silent --show-error --user "${SONAR_TOKEN}:" \
-                    --get "${SONAR_HOST_URL}/api/issues/search" \
-                    --data-urlencode "componentKeys=${SONAR_PROJECT_KEY}" \
-                    --data-urlencode "resolved=false" \
-                    --data-urlencode "ps=100" \
-                    | jq '.issues[] | {rule, message, component, line}'
-
     publish:
       if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       needs: 

@@ -13,8 +13,8 @@ namespace PANiXiDA.Core.Presentation.Http.UnitTests.Generators;
 public sealed class EndpointRegistrationGeneratorTests
 {
     private static readonly MetadataReference[] References =
-        ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
-        .Select(path => MetadataReference.CreateFromFile(path)).ToArray();
+        [.. ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
+            .Select(path => MetadataReference.CreateFromFile(path))];
 
     [Fact(DisplayName = "Generated endpoint registrations replace discovery and activation with direct factories")]
     public void Generate_ShouldCreateDirectFactories()

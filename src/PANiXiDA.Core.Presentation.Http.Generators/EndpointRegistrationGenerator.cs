@@ -121,7 +121,7 @@ public sealed class EndpointRegistrationGenerator : IIncrementalGenerator
 
             if (!endpoints.TryGetValue(group, out var groupEndpoints))
             {
-                groupEndpoints = new List<INamedTypeSymbol>();
+                groupEndpoints = [];
                 endpoints.Add(group, groupEndpoints);
             }
 

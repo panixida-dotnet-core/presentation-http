@@ -13,7 +13,7 @@ namespace PANiXiDA.Core.Presentation.Http.Endpoints;
 [EditorBrowsable(EditorBrowsableState.Never)]
 public static class EndpointRegistry
 {
-    private static readonly ConditionalWeakTable<Assembly, Registration> Registrations = new();
+    private static readonly ConditionalWeakTable<Assembly, Registration> Registrations = [];
 
     /// <summary>
     /// Registers statically generated group mappings and endpoint factories for an assembly.
