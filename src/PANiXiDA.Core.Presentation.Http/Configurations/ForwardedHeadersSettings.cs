@@ -40,13 +40,7 @@ internal sealed class ForwardedHeadersSettings
             ForwardedHeaders = options.ForwardedHeaders,
             ForwardLimit = options.ForwardLimit,
             RequireHeaderSymmetry = options.RequireHeaderSymmetry,
-            AllowedHosts = [.. options.AllowedHosts],
-            KnownProxies = options.KnownProxies.Select(address => address.ToString()).ToList(),
-            KnownIPNetworks = options.KnownIPNetworks.Select(network => new NetworkSettings
-            {
-                Prefix = network.BaseAddress.ToString(),
-                PrefixLength = network.PrefixLength
-            }).ToList()
+            AllowedHosts = [.. options.AllowedHosts]
         };
     }
 

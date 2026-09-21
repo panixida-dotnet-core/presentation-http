@@ -107,9 +107,13 @@ public sealed class EndpointRegistrationGeneratorTests
     [InlineData("public class Group : Base { private Group() { } }", "", "", "PANHTTPSG002")]
     [InlineData("public class Group : Base { public Group() { } public Group(string value) { } }", "", "", "PANHTTPSG002")]
     [InlineData("public class Group : Base { public Group(ref int value) { } }", "", "", "PANHTTPSG003")]
+    [InlineData("public class Group : Base { public Group(System.Span<int> value) { } }", "", "", "PANHTTPSG003")]
+    [InlineData("public unsafe class Group : Base { public Group(int* value) { } }", "", "", "PANHTTPSG003")]
+    [InlineData("public unsafe class Group : Base { public Group(delegate*<void> value) { } }", "", "", "PANHTTPSG003")]
     [InlineData("public class Group : Base { public required string Value { get; init; } }", "", "", "PANHTTPSG003")]
     [InlineData("public class Group : Base { public Group([Microsoft.Extensions.DependencyInjection.ServiceKey] object key) { } }", "", "", "PANHTTPSG003")]
     [InlineData("public class Group : Base { public Group([Microsoft.Extensions.DependencyInjection.FromKeyedServices] object value) { } }", "", "", "PANHTTPSG003")]
+    [InlineData("public class Group : Base { public Group([Microsoft.Extensions.DependencyInjection.FromKeyedServices(new int[] { 1 })] object value) { } }", "", "", "PANHTTPSG003")]
     [InlineData("public class Group : Base { [Microsoft.Extensions.DependencyInjection.ActivatorUtilitiesConstructor] public Group() { } [Microsoft.Extensions.DependencyInjection.ActivatorUtilitiesConstructor] public Group(string value) { } }", "", "", "PANHTTPSG002")]
     public void Generate_ShouldDiagnoseUnsupportedTypes(string declaration, string prefix, string suffix, string diagnostic)
     {
@@ -121,6 +125,42 @@ public sealed class EndpointRegistrationGeneratorTests
 
         // Assert
         result.Diagnostics.Single().Id.ShouldBe(diagnostic);
+    }
+
+    [Fact(DisplayName = "Endpoint generator rejects ref-like groups without generating invalid generic registrations")]
+    public void Generate_ShouldRejectRefLikeGroup()
+    {
+        // Arrange
+        const string source = """
+            public ref struct Group : PANiXiDA.Core.Presentation.Http.Endpoints.IEndpointGroup
+            {
+                public string Route => "/";
+                public string Name => "Group";
+                public Asp.Versioning.ApiVersion ApiVersion => new(1, 0);
+                public void Map(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder endpoints) { }
+            }
+            """;
+
+        // Act
+        var (result, _) = Compile(source, "PANHTTPSG001");
+
+        // Assert
+        result.GeneratedTrees.Single().GetText(TestContext.Current.CancellationToken).ToString().ShouldNotContain("typeof(global::Group)");
+    }
+
+    [Theory(DisplayName = "Endpoint generator diagnoses incomplete constructor code without crashing during editing")]
+    [InlineData("public Group([Microsoft.Extensions.DependencyInjection.FromKeyedServices(Unknown)] object value) { }", "CS0103")]
+    [InlineData("private class Dependency { } public Group(Dependency value) { }", "CS0051")]
+    public void Generate_ShouldHandleInvalidConstructorSource(string members, string compilerDiagnostic)
+    {
+        // Arrange
+        var source = GroupBaseSource + "public class Group : Base { " + members + " }";
+
+        // Act
+        var (result, _) = Compile(source, "PANHTTPSG003", expectedCompilerDiagnostic: compilerDiagnostic);
+
+        // Assert
+        result.Results.Single().Exception.ShouldBeNull();
     }
 
     [Theory(DisplayName = "Generated factories initialize an untouched assembly and resolve keyed and optional constructor dependencies")]
@@ -277,13 +317,13 @@ public sealed class EndpointRegistrationGeneratorTests
         """;
 
     private static (GeneratorDriverRunResult Result, Compilation Compilation) Compile(string source, string? expectedDiagnostic = null,
-        MetadataReference? additionalReference = null)
+        MetadataReference? additionalReference = null, string? expectedCompilerDiagnostic = null)
     {
         var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Preview);
         var compilation = CSharpCompilation.Create("GeneratedEndpoints_" + Guid.NewGuid().ToString("N"),
             [CSharpSyntaxTree.ParseText(source, parseOptions, cancellationToken: TestContext.Current.CancellationToken)],
             additionalReference is null ? References : References.Append(additionalReference),
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable, allowUnsafe: true));
         var driver = CSharpGeneratorDriver.Create([new EndpointRegistrationGenerator().AsSourceGenerator()], parseOptions: parseOptions)
             .RunGeneratorsAndUpdateCompilation(compilation, out var updated, out var diagnostics, TestContext.Current.CancellationToken);
         if (expectedDiagnostic is null)
@@ -294,7 +334,9 @@ public sealed class EndpointRegistrationGeneratorTests
         {
             diagnostics.Select(diagnostic => diagnostic.Id).ShouldBe([expectedDiagnostic]);
         }
-        updated.GetDiagnostics(TestContext.Current.CancellationToken).Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var compilerErrors = updated.GetDiagnostics(TestContext.Current.CancellationToken)
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).Select(diagnostic => diagnostic.Id);
+        compilerErrors.ShouldBe(expectedCompilerDiagnostic is null ? [] : [expectedCompilerDiagnostic]);
         return (driver.GetRunResult(), updated);
     }
 }
