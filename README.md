@@ -15,13 +15,13 @@ It provides common Minimal API endpoint conventions, API versioning, OpenAPI set
 ## Features
 
 - `AddHttp` registers the default HTTP presentation services.
-- `UseHttp` adds the default middleware pipeline and maps discovered endpoint groups.
+- `UseHttp` adds the default middleware pipeline and maps source-generated endpoint registrations.
 - JSON numeric values use strict number handling.
 - Module assemblies can be mapped to separate OpenAPI documents and Scalar sources through the `HttpModules` configuration section.
 - Health checks are registered by `AddHttp` and exposed at `/health` by `UseHttp`.
 - `IEndpointGroup` defines route, resource name, and API version metadata for Minimal API endpoint groups.
 - `IEndpoint<TGroup>` defines route, name, and summary metadata for endpoints that belong to a specific group.
-- `EndpointMapper` discovers and maps endpoints in a deterministic type-name order.
+- The bundled Roslyn generator discovers endpoint types at compile time and emits constructor factories in deterministic type-name order.
 - `EndpointConstants.EndpointPrefix` defines `/api/v{version:apiVersion}`.
 - `ResultHttpMapper` maps `Result` and `Result<T>` to `IResult`.
 
@@ -34,7 +34,7 @@ It provides common Minimal API endpoint conventions, API versioning, OpenAPI set
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="PANiXiDA.Core.Presentation.Http" Version="2.0.0" />
+  <PackageReference Include="PANiXiDA.Core.Presentation.Http" Version="3.0.0" />
 </ItemGroup>
 ```
 
@@ -46,6 +46,7 @@ using PANiXiDA.Core.Presentation.Http.DependencyInjection;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddHttp(builder.Configuration);
+builder.Services.AddValidation();
 
 var app = builder.Build();
 
@@ -53,6 +54,10 @@ app.UseHttp(typeof(Program).Assembly);
 
 app.Run();
 ```
+
+Reference the package directly in each project that declares endpoints, and keep its `analyzers` assets enabled.
+`AddHttp` retains the MVC-based API Versioning explorer and is not supported in a trimmed or Native AOT application; see [Native AOT](#native-aot) for the supported boundary.
+Call `AddValidation()` in each assembly containing endpoint DTOs, so ASP.NET Core can generate its validation metadata there.
 
 ## Forwarded Headers
 
@@ -66,7 +71,7 @@ ForwardedHeaders.XForwardedProto
 
 The package also clears the default loopback-only `KnownIPNetworks` and `KnownProxies` restrictions so applications behind Kubernetes ingress or Gateway API proxies can process forwarded headers without per-service proxy registration.
 
-Additional values can be bound from the standard ASP.NET Core `ForwardedHeadersOptions` model by adding a `ForwardedHeaders` section to the application configuration.
+Forwarded header names, original header names, `ForwardedHeaders`, `ForwardLimit`, `RequireHeaderSymmetry`, `AllowedHosts`, `KnownProxies`, and network lists can be supplied through a `ForwardedHeaders` section. A generated binder reads an internal settings model and applies it to `ForwardedHeadersOptions`; no reflection-based configuration binding is used.
 
 ```json
 {
@@ -80,6 +85,8 @@ Additional values can be bound from the standard ASP.NET Core `ForwardedHeadersO
   }
 }
 ```
+
+`KnownProxies` contains IP address strings. `KnownIPNetworks` contains objects such as `{ "Prefix": "10.0.0.0", "PrefixLength": 8 }`; the legacy `KnownNetworks` key accepts the same shape. Invalid addresses or network prefixes fail when options are resolved instead of being silently ignored. Options reload notifications are preserved.
 
 For stricter trust boundaries, configure `ForwardedHeadersOptions` directly after `AddHttp`.
 
@@ -160,7 +167,12 @@ public void Map(IEndpointRouteBuilder endpoints)
 An endpoint implements `IEndpoint<TGroup>`, where `TGroup` is the endpoint group it belongs to.
 Endpoint metadata is declared as public properties so it can be required by the interface and applied by `EndpointMapper`.
 
+Groups and their endpoints must be in the same assembly. Concrete implementations must be accessible from generated code (public or internal, including accessible nested types), non-generic, and have one public constructor. For multiple public constructors, mark exactly one with `[ActivatorUtilitiesConstructor]`. Constructor dependencies are resolved from DI, including explicit `[FromKeyedServices(key)]` keys and optional parameter defaults. Missing required services still fail when endpoints are mapped. Constructor selection no longer depends on which services happen to be registered at runtime.
+
+Abstract types and interfaces are ignored. Private, protected, file-local and open generic implementations, unsupported constructors, and endpoints targeting a group in another assembly produce `PANHTTPSG001`–`PANHTTPSG004` compiler errors. No runtime scanning or activation fallback is used if the analyzer is missing.
+
 ```csharp
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 
 using PANiXiDA.Core.Presentation.Http.Endpoints;
@@ -175,15 +187,50 @@ public sealed class GetOrderEndpoint : IEndpoint<OrdersEndpointGroup>
 
     public void Map(EndpointMapBuilder builder)
     {
-        builder.MapGet((Guid id) =>
-            {
-                return TypedResults.Ok(new OrderResponse(id));
-            });
+        var route = builder.Group.MapGet(builder.Route, (Guid id) =>
+        {
+            return TypedResults.Ok(new OrderResponse(id));
+        });
+        builder.ApplyMetadata(route);
     }
 }
 
 public sealed record OrderResponse(Guid Id);
 ```
+
+Call the standard ASP.NET Core `MapGet`, `MapPost`, `MapPut`, `MapPatch`, `MapDelete`, or `MapMethods` directly with the concrete handler. `ApplyMetadata` only adds the endpoint name and summary; it does not wrap the handler. This keeps handlers visible to ASP.NET Core's Request Delegate Generator.
+
+## Migrating from 2.x
+
+- Rebuild every endpoint assembly with the included analyzer. Runtime assembly scanning and `ActivatorUtilities` endpoint activation have been removed.
+- Replace `builder.MapGet(handler)` with `builder.ApplyMetadata(builder.Group.MapGet(builder.Route, handler))`, and likewise for other HTTP methods.
+- Resolve ambiguous constructors explicitly with `[ActivatorUtilitiesConstructor]`. Private and open generic endpoint implementations now fail at compilation.
+- Register validation explicitly in each endpoint assembly instead of relying on `AddHttp`. On .NET 10, use public request DTOs for automatic validation discovery; the smoke application checks that an invalid request returns `400`.
+- Review configured proxy/network values: malformed values now fail explicitly. The existing configuration keys, defaults and reload behavior are retained.
+- Core dependencies are Application `4.0.3`, ResultPattern `1.0.4`, and transitive Domain `3.0.1`.
+
+## Native AOT
+
+The runtime project enables `IsAotCompatible`. Our endpoint discovery and construction use generated registrations; configuration binding uses the .NET Roslyn generator. The registry uses assembly identity and module initialization, as in the Core EF registry, without scanning types or invoking constructors through reflection.
+
+The standard `AddHttp` setup still calls `Asp.Versioning.Mvc.ApiExplorer` `10.0.1`, whose `AddApiExplorer()` registers MVC and is marked `RequiresUnreferencedCode`. Both public `AddHttp` overloads propagate that restriction. A warning-free library build is not a claim that this dependency path is AOT-compatible.
+
+The consuming application must enable the Request Delegate Generator in every endpoint project, register a `JsonSerializerContext` for its request/response DTOs, and register validation in the appropriate assembly. Source generation does not remove all reflection inside ASP.NET Core, DI, API Versioning, Scalar, or their generators; those are dependency-owned paths.
+
+```xml
+<PropertyGroup>
+  <EnableRequestDelegateGenerator>true</EnableRequestDelegateGenerator>
+</PropertyGroup>
+```
+
+`PANiXiDA.Core.Presentation.Http.AotSmokeTests` exercises generated registration, constructor injection, configuration, versioned routes, JSON, validation, exception handling and module OpenAPI documents. It registers the individual services explicitly to exclude the unsupported MVC ApiExplorer setup. CI publishes and runs this application as a native Linux executable. It does not certify the full `AddHttp` path or every application-specific DTO/handler.
+
+```powershell
+dotnet publish tests/PANiXiDA.Core.Presentation.Http.AotSmokeTests -c Release -r win-x64 -o ./artifacts/aot
+./artifacts/aot/PANiXiDA.Core.Presentation.Http.AotSmokeTests.exe
+```
+
+Native compilation requires the platform toolchain, including Visual Studio C++ build tools on Windows. See the [ASP.NET Core Native AOT documentation](https://learn.microsoft.com/aspnet/core/fundamentals/native-aot?view=aspnetcore-10.0).
 
 ## Result Mapping
 
@@ -354,6 +401,7 @@ The default API version is `1.0`, and the version must be present in the route.
 
 ```text
 src/
+  PANiXiDA.Core.Presentation.Http.Generators/
   PANiXiDA.Core.Presentation.Http/
     Configurations/
     DependencyInjection/
@@ -361,6 +409,7 @@ src/
     Helpers/
     Middlewares/
 tests/
+  PANiXiDA.Core.Presentation.Http.AotSmokeTests/
   PANiXiDA.Core.Presentation.Http.UnitTests/
 ```
 
@@ -386,15 +435,15 @@ The source files under `src/PANiXiDA.Core.Presentation.Http` are covered by unit
 
 ### Continuous integration
 
-Every pull request and push to `main` runs formatting, tests, and mandatory
-SonarQube analysis. Publishing from `main` starts only after the SonarQube
-Quality Gate succeeds.
+Every pull request and push to `main` runs formatting, tests, Native AOT smoke tests, and mandatory
+SonarQube analysis. Publishing from `main` requires all checks, including the SonarQube Quality Gate.
 
 ## Package Contents
 
 The NuGet package includes:
 
 - compiled library for `net10.0`;
+- the Roslyn generator for `netstandard2.0`, packaged under `analyzers/dotnet/cs`;
 - XML documentation;
 - README;
 - package icon;

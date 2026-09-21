@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <IsPackable>true</IsPackable>
+        <IsAotCompatible>true</IsAotCompatible>
+        <EnableConfigurationBindingGenerator>true</EnableConfigurationBindingGenerator>
 
         <AssemblyName>PANiXiDA.Core.Presentation.Http</AssemblyName>
 
@@ -31,5 +33,13 @@
 
     <ItemGroup>
         <InternalsVisibleTo Include="PANiXiDA.Core.Presentation.Http.UnitTests" />
+        <InternalsVisibleTo Include="PANiXiDA.Core.Presentation.Http.AotSmokeTests" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../PANiXiDA.Core.Presentation.Http.Generators/PANiXiDA.Core.Presentation.Http.Generators.csproj"
+                          OutputItemType="Analyzer" ReferenceOutputAssembly="false" PrivateAssets="all" />
+        <None Include="../PANiXiDA.Core.Presentation.Http.Generators/bin/$(Configuration)/netstandard2.0/PANiXiDA.Core.Presentation.Http.Generators.dll"
+              Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
     </ItemGroup>
 </Project>

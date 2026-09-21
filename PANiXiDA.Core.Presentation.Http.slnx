@@ -16,9 +16,11 @@
     <File Path="version.json" />
   </Folder>
   <Folder Name="/src/">
+    <Project Path="src/PANiXiDA.Core.Presentation.Http.Generators/PANiXiDA.Core.Presentation.Http.Generators.csproj" />
     <Project Path="src/PANiXiDA.Core.Presentation.Http/PANiXiDA.Core.Presentation.Http.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/PANiXiDA.Core.Presentation.Http.AotSmokeTests/PANiXiDA.Core.Presentation.Http.AotSmokeTests.csproj" />
     <Project Path="tests/PANiXiDA.Core.Presentation.Http.UnitTests/PANiXiDA.Core.Presentation.Http.UnitTests.csproj" />
   </Folder>
 </Solution>

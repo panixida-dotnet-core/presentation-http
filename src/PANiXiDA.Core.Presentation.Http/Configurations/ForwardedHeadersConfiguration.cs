@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace PANiXiDA.Core.Presentation.Http.Configurations;
 
@@ -25,7 +26,15 @@ internal static class ForwardedHeadersConfiguration
 
         if (configuration is not null)
         {
-            services.Configure<ForwardedHeadersOptions>(ResolveConfiguration(configuration));
+            var section = ResolveConfiguration(configuration);
+            services.AddSingleton<IOptionsChangeTokenSource<ForwardedHeadersOptions>>(
+                new ConfigurationChangeTokenSource<ForwardedHeadersOptions>(section));
+            services.Configure<ForwardedHeadersOptions>(options =>
+            {
+                var settings = ForwardedHeadersSettings.FromOptions(options);
+                section.Bind(settings);
+                settings.Apply(options);
+            });
         }
 
         return services;

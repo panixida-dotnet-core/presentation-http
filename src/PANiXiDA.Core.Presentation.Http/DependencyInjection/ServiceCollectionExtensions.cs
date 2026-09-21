@@ -8,6 +8,7 @@ using PANiXiDA.Core.Presentation.Http.Middlewares;
 using PANiXiDA.Core.Presentation.Http.Modularity;
 
 using System.Reflection;
+using System.Diagnostics.CodeAnalysis;
 
 namespace PANiXiDA.Core.Presentation.Http.DependencyInjection;
 
@@ -17,11 +18,12 @@ namespace PANiXiDA.Core.Presentation.Http.DependencyInjection;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers the default HTTP presentation services, including API versioning, OpenAPI, Problem Details, exception handling, validation, health checks, and forwarded headers.
+    /// Registers the default HTTP presentation services, including API versioning, OpenAPI, Problem Details, exception handling, health checks, and forwarded headers.
     /// </summary>
     /// <param name="services">The application service collection.</param>
     /// <param name="configuration">The application configuration. The standard <c>ForwardedHeaders</c> section is used when present.</param>
     /// <returns>The original service collection for further configuration.</returns>
+    [RequiresUnreferencedCode(ApiVersioningConfiguration.TrimmingMessage)]
     public static IServiceCollection AddHttp(
         this IServiceCollection services,
         IConfiguration configuration)
@@ -36,6 +38,7 @@ public static class ServiceCollectionExtensions
     /// <param name="configuration">The application configuration. Module document names and titles are read from the <c>HttpModules</c> section by presentation assembly name.</param>
     /// <param name="moduleAssemblies">The presentation assemblies to map and expose as separate OpenAPI documents.</param>
     /// <returns>The original service collection for further configuration.</returns>
+    [RequiresUnreferencedCode(ApiVersioningConfiguration.TrimmingMessage)]
     public static IServiceCollection AddHttp(
         this IServiceCollection services,
         IConfiguration configuration,
@@ -46,6 +49,7 @@ public static class ServiceCollectionExtensions
         return AddHttpCore(services, configuration, moduleAssemblies);
     }
 
+    [RequiresUnreferencedCode(ApiVersioningConfiguration.TrimmingMessage)]
     private static IServiceCollection AddHttpCore(
         IServiceCollection services,
         IConfiguration configuration,
@@ -61,17 +65,16 @@ public static class ServiceCollectionExtensions
         services.AddProblemDetailsConfiguration();
         services.AddExceptionHandler<BadHttpRequestExceptionHandler>();
         services.AddExceptionHandler<ExceptionHandler>();
-        services.AddValidation();
         services.AddHealthChecks();
 
         return services;
     }
 
     /// <summary>
-    /// Adds the HTTP presentation middleware and maps endpoint groups from the specified assemblies.
+    /// Adds the HTTP presentation middleware and maps source-generated endpoint groups from the specified assemblies.
     /// </summary>
     /// <param name="app">The ASP.NET Core application instance.</param>
-    /// <param name="assemblies">The assemblies used to discover endpoint groups.</param>
+    /// <param name="assemblies">The assemblies containing generated endpoint registrations.</param>
     /// <returns>The original application instance for further configuration.</returns>
     public static WebApplication UseHttp(this WebApplication app, params Assembly[] assemblies)
     {
@@ -89,7 +92,7 @@ public static class ServiceCollectionExtensions
 
         foreach (var presentationAssembly in moduleAssemblies)
         {
-            EndpointGroupMapper.MapDiscoveredGroups(app, presentationAssembly);
+            EndpointRegistry.MapGroups(app, presentationAssembly);
             mappedAssemblies.Add(presentationAssembly);
         }
 
@@ -100,7 +103,7 @@ public static class ServiceCollectionExtensions
                 continue;
             }
 
-            EndpointGroupMapper.MapDiscoveredGroups(app, assembly);
+            EndpointRegistry.MapGroups(app, assembly);
         }
 
         return app;

@@ -46,7 +46,7 @@ public sealed class EndpointMapBuilderTests
     public void MapGet_ShouldMapConfiguredRouteHttpMethodNameAndSummary()
     {
         AssertMappedEndpoint(
-            static builder => builder.MapGet(static () => Results.Ok()),
+            static builder => builder.ApplyMetadata(builder.Group.MapGet(builder.Route, static () => Results.Ok())),
             "GET");
     }
 
@@ -54,7 +54,7 @@ public sealed class EndpointMapBuilderTests
     public void MapPost_ShouldMapConfiguredRouteHttpMethodNameAndSummary()
     {
         AssertMappedEndpoint(
-            static builder => builder.MapPost(static () => Results.Created()),
+            static builder => builder.ApplyMetadata(builder.Group.MapPost(builder.Route, static () => Results.Created())),
             "POST");
     }
 
@@ -62,7 +62,7 @@ public sealed class EndpointMapBuilderTests
     public void MapPut_ShouldMapConfiguredRouteHttpMethodNameAndSummary()
     {
         AssertMappedEndpoint(
-            static builder => builder.MapPut(static () => Results.NoContent()),
+            static builder => builder.ApplyMetadata(builder.Group.MapPut(builder.Route, static () => Results.NoContent())),
             "PUT");
     }
 
@@ -70,7 +70,7 @@ public sealed class EndpointMapBuilderTests
     public void MapPatch_ShouldMapConfiguredRouteHttpMethodNameAndSummary()
     {
         AssertMappedEndpoint(
-            static builder => builder.MapPatch(static () => Results.NoContent()),
+            static builder => builder.ApplyMetadata(builder.Group.MapPatch(builder.Route, static () => Results.NoContent())),
             "PATCH");
     }
 
@@ -78,7 +78,7 @@ public sealed class EndpointMapBuilderTests
     public void MapDelete_ShouldMapConfiguredRouteHttpMethodNameAndSummary()
     {
         AssertMappedEndpoint(
-            static builder => builder.MapDelete(static () => Results.NoContent()),
+            static builder => builder.ApplyMetadata(builder.Group.MapDelete(builder.Route, static () => Results.NoContent())),
             "DELETE");
     }
 
@@ -86,22 +86,22 @@ public sealed class EndpointMapBuilderTests
     public void MapMethods_ShouldMapConfiguredRouteHttpMethodsNameAndSummary()
     {
         AssertMappedEndpoint(
-            static builder => builder.MapMethods(["HEAD", "OPTIONS"], static () => Results.Ok()),
+            static builder => builder.ApplyMetadata(builder.Group.MapMethods(builder.Route, ["HEAD", "OPTIONS"], static () => Results.Ok())),
             "HEAD",
             "OPTIONS");
     }
 
-    [Fact(DisplayName = "MapPut validates handler")]
-    public void MapPut_ShouldValidateHandler()
+    [Fact(DisplayName = "ApplyMetadata rejects a null route handler builder")]
+    public void ApplyMetadata_ShouldValidateBuilder()
     {
         var builder = WebApplication.CreateBuilder();
         using var app = builder.Build();
         var group = app.MapGroup("/users");
         var endpointMapBuilder = CreateEndpointMapBuilder(group);
 
-        var exception = Should.Throw<ArgumentNullException>(() => endpointMapBuilder.MapPut(null!));
+        var exception = Should.Throw<ArgumentNullException>(() => endpointMapBuilder.ApplyMetadata(null!));
 
-        exception.ParamName.ShouldBe("handler");
+        exception.ParamName.ShouldBe("builder");
     }
 
     private static void AssertMappedEndpoint(
