@@ -5,8 +5,6 @@ using System.Net;
 
 namespace PANiXiDA.Core.Presentation.Http.Configurations;
 
-// Bind simple values with the configuration source generator. Binding the framework options
-// directly introduces both legacy and current IPNetwork types and reflection-based conversions.
 internal sealed class ForwardedHeadersSettings
 {
     public string ForwardedForHeaderName { get; set; } = string.Empty;
@@ -46,7 +44,6 @@ internal sealed class ForwardedHeadersSettings
 
     internal void Apply(ForwardedHeadersOptions options)
     {
-        // Parse before updating the trust lists: invalid configuration must not silently widen trust.
         var proxies = KnownProxies.Select(IPAddress.Parse).ToArray();
         var networks = KnownIPNetworks.Concat(KnownNetworks)
             .Select(network => new System.Net.IPNetwork(IPAddress.Parse(network.Prefix), network.PrefixLength)).ToArray();

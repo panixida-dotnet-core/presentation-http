@@ -93,7 +93,6 @@ public sealed class ForwardedHeadersConfigurationTests
     [Fact(DisplayName = "Generated forwarded headers binding preserves header names, proxy addresses and network lists")]
     public void AddForwardedHeadersConfiguration_ShouldBindHeadersAndTrustedNetworks()
     {
-        // Arrange
         var services = new ServiceCollection();
         var configuration = CreateConfiguration(new Dictionary<string, string?>
         {
@@ -113,11 +112,9 @@ public sealed class ForwardedHeadersConfigurationTests
             ["ForwardedHeaders:ForwardLimit"] = null
         });
 
-        // Act
         services.AddForwardedHeadersConfiguration(configuration);
         var options = CreateOptions(services);
 
-        // Assert
         options.ForwardedForHeaderName.ShouldBe("Custom-For");
         options.ForwardedHostHeaderName.ShouldBe("Custom-Host");
         options.ForwardedProtoHeaderName.ShouldBe("Custom-Proto");
@@ -134,7 +131,6 @@ public sealed class ForwardedHeadersConfigurationTests
     [Fact(DisplayName = "Generated forwarded headers binding preserves option configuration and reload notifications")]
     public void AddForwardedHeadersConfiguration_ShouldPreserveDefaultsAndReload()
     {
-        // Arrange
         var services = new ServiceCollection();
         services.Configure<ForwardedHeadersOptions>(options =>
         {
@@ -151,11 +147,9 @@ public sealed class ForwardedHeadersConfigurationTests
         var monitor = provider.GetRequiredService<IOptionsMonitor<ForwardedHeadersOptions>>();
         monitor.CurrentValue.ForwardLimit.ShouldBe(2);
 
-        // Act
         configuration["ForwardedHeaders:ForwardLimit"] = "4";
         configuration.Reload();
 
-        // Assert
         monitor.CurrentValue.ForwardLimit.ShouldBe(4);
         monitor.CurrentValue.OriginalHostHeaderName.ShouldBe("Previous-Host");
         monitor.CurrentValue.AllowedHosts.ShouldBe(["previous.example", "current.example"]);
@@ -166,12 +160,10 @@ public sealed class ForwardedHeadersConfigurationTests
     [InlineData("KnownIPNetworks:0:Prefix", "invalid-address")]
     public void AddForwardedHeadersConfiguration_ShouldRejectInvalidTrustConfiguration(string key, string value)
     {
-        // Arrange
         var services = new ServiceCollection();
         var configuration = CreateConfiguration(new Dictionary<string, string?> { ["ForwardedHeaders:" + key] = value });
         services.AddForwardedHeadersConfiguration(configuration);
 
-        // Act / Assert
         Should.Throw<FormatException>(() => CreateOptions(services));
     }
 

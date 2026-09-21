@@ -19,7 +19,6 @@ public sealed class EndpointRegistrationGeneratorTests
     [Fact(DisplayName = "Generated endpoint registrations replace discovery and activation with direct factories")]
     public void Generate_ShouldCreateDirectFactories()
     {
-        // Arrange
         const string source = """
             using Asp.Versioning;
             using Microsoft.AspNetCore.Routing;
@@ -41,11 +40,9 @@ public sealed class EndpointRegistrationGeneratorTests
             }
             """;
 
-        // Act
         var (result, _) = Compile(source);
         var generated = result.GeneratedTrees.Single().GetText(TestContext.Current.CancellationToken).ToString();
 
-        // Assert
         generated.ShouldContain("new global::Group(");
         generated.ShouldContain("new global::Endpoint(");
         generated.ShouldContain("GetRequiredService<global::Dependency>");
@@ -57,7 +54,6 @@ public sealed class EndpointRegistrationGeneratorTests
     [Fact(DisplayName = "Endpoint generator discovers inherited contracts and deduplicates partial types in runtime name order")]
     public void Generate_ShouldPreserveDiscoveryRules()
     {
-        // Arrange
         const string source = """
             using Asp.Versioning;
             using Microsoft.AspNetCore.Routing;
@@ -86,11 +82,9 @@ public sealed class EndpointRegistrationGeneratorTests
             public class Unrelated { }
             """;
 
-        // Act
         var (result, _) = Compile(source);
         var generated = result.GeneratedTrees.Single().GetText(TestContext.Current.CancellationToken).ToString();
 
-        // Assert
         generated.ShouldNotContain("new global::GroupBase");
         generated.ShouldNotContain("new global::Unrelated");
         generated.Split("new global::AEndpoint()").Length.ShouldBe(2);
@@ -117,20 +111,16 @@ public sealed class EndpointRegistrationGeneratorTests
     [InlineData("public class Group : Base { [Microsoft.Extensions.DependencyInjection.ActivatorUtilitiesConstructor] public Group() { } [Microsoft.Extensions.DependencyInjection.ActivatorUtilitiesConstructor] public Group(string value) { } }", "", "", "PANHTTPSG002")]
     public void Generate_ShouldDiagnoseUnsupportedTypes(string declaration, string prefix, string suffix, string diagnostic)
     {
-        // Arrange
         var source = GroupBaseSource + prefix + declaration + suffix;
 
-        // Act
         var (result, _) = Compile(source, diagnostic);
 
-        // Assert
         result.Diagnostics.Single().Id.ShouldBe(diagnostic);
     }
 
     [Fact(DisplayName = "Endpoint generator rejects ref-like groups without generating invalid generic registrations")]
     public void Generate_ShouldRejectRefLikeGroup()
     {
-        // Arrange
         const string source = """
             public ref struct Group : PANiXiDA.Core.Presentation.Http.Endpoints.IEndpointGroup
             {
@@ -141,10 +131,8 @@ public sealed class EndpointRegistrationGeneratorTests
             }
             """;
 
-        // Act
         var (result, _) = Compile(source, "PANHTTPSG001");
 
-        // Assert
         result.GeneratedTrees.Single().GetText(TestContext.Current.CancellationToken).ToString().ShouldNotContain("typeof(global::Group)");
     }
 
@@ -153,13 +141,10 @@ public sealed class EndpointRegistrationGeneratorTests
     [InlineData("private class Dependency { } public Group(Dependency value) { }", "CS0051")]
     public void Generate_ShouldHandleInvalidConstructorSource(string members, string compilerDiagnostic)
     {
-        // Arrange
         var source = GroupBaseSource + "public class Group : Base { " + members + " }";
 
-        // Act
         var (result, _) = Compile(source, "PANHTTPSG003", expectedCompilerDiagnostic: compilerDiagnostic);
 
-        // Assert
         result.Results.Single().Exception.ShouldBeNull();
     }
 
@@ -168,7 +153,6 @@ public sealed class EndpointRegistrationGeneratorTests
     [InlineData(true, "registered3fallback")]
     public void GeneratedRegistration_ShouldInitializeAssemblyAndResolveDependencies(bool registerOverride, string expected)
     {
-        // Arrange
         var source = GroupBaseSource + """
             public sealed class Group : Base
             {
@@ -204,10 +188,8 @@ public sealed class EndpointRegistrationGeneratorTests
         {
             var assembly = loadContext.LoadFromStream(stream);
 
-            // Act
             EndpointRegistry.MapGroups(app, assembly);
 
-            // Assert
             calls.ShouldBe([expected, "mapped"]);
         }
         finally
@@ -219,16 +201,13 @@ public sealed class EndpointRegistrationGeneratorTests
     [Fact(DisplayName = "Endpoint generator ignores projects without the HTTP runtime contract")]
     public void Generate_ShouldIgnoreMissingRuntime()
     {
-        // Arrange
         var references = References.Where(reference => !reference.Display!.EndsWith("PANiXiDA.Core.Presentation.Http.dll", StringComparison.OrdinalIgnoreCase));
         var compilation = CSharpCompilation.Create("NoHttp", references: references,
             options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
-        // Act
         var driver = CSharpGeneratorDriver.Create(new EndpointRegistrationGenerator())
             .RunGenerators(compilation, TestContext.Current.CancellationToken);
 
-        // Assert
         driver.GetRunResult().GeneratedTrees.ShouldBeEmpty();
         driver.GetRunResult().Diagnostics.ShouldBeEmpty();
     }
@@ -236,7 +215,6 @@ public sealed class EndpointRegistrationGeneratorTests
     [Fact(DisplayName = "Endpoint generator compares contract symbols instead of accepting identically named foreign interfaces")]
     public void Generate_ShouldIgnoreForeignContracts()
     {
-        // Arrange
         var foreign = CSharpCompilation.Create("ForeignHttp", [CSharpSyntaxTree.ParseText("""
             namespace PANiXiDA.Core.Presentation.Http.Endpoints
             {
@@ -249,14 +227,12 @@ public sealed class EndpointRegistrationGeneratorTests
         foreign.Emit(stream, cancellationToken: TestContext.Current.CancellationToken).Success.ShouldBeTrue();
         var reference = MetadataReference.CreateFromImage(stream.ToArray(), new MetadataReferenceProperties(aliases: ["foreign"]));
 
-        // Act
         var (result, _) = Compile("""
             extern alias foreign;
             public class Group : foreign::PANiXiDA.Core.Presentation.Http.Endpoints.IEndpointGroup { }
             public class Endpoint : foreign::PANiXiDA.Core.Presentation.Http.Endpoints.IEndpoint<Group> { }
             """, additionalReference: reference);
 
-        // Assert
         var generated = result.GeneratedTrees.Single().GetText(TestContext.Current.CancellationToken).ToString();
         generated.ShouldNotContain("new global::Group(");
         generated.ShouldNotContain("new global::Endpoint(");
@@ -265,7 +241,6 @@ public sealed class EndpointRegistrationGeneratorTests
     [Fact(DisplayName = "Endpoint generator rejects endpoints targeting a group from another assembly")]
     public void Generate_ShouldRejectExternalGroup()
     {
-        // Arrange
         const string source = """
             public class Endpoint : PANiXiDA.Core.Presentation.Http.Endpoints.IEndpoint<PANiXiDA.Core.Presentation.Http.UnitTests.Endpoints.Fixtures.Groups.OtherEndpointGroup>
             {
@@ -276,17 +251,14 @@ public sealed class EndpointRegistrationGeneratorTests
             }
             """;
 
-        // Act
         var (result, _) = Compile(source, "PANHTTPSG004");
 
-        // Assert
         result.Diagnostics.Single().GetMessage().ShouldContain("must be declared in the same assembly");
     }
 
     [Fact(DisplayName = "Endpoint generator supports escaped type names and constructors initializing required members")]
     public void Generate_ShouldSupportEscapedTypesAndRequiredMembers()
     {
-        // Arrange
         var source = GroupBaseSource + """
             namespace @event
             {
@@ -299,10 +271,8 @@ public sealed class EndpointRegistrationGeneratorTests
             }
             """;
 
-        // Act
         var (result, _) = Compile(source);
 
-        // Assert
         result.GeneratedTrees.Single().GetText(TestContext.Current.CancellationToken).ToString().ShouldContain("new global::@event.@class(");
     }
 
