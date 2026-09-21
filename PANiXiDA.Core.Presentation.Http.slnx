@@ -20,7 +20,7 @@
     <Project Path="src/PANiXiDA.Core.Presentation.Http/PANiXiDA.Core.Presentation.Http.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/PANiXiDA.Core.Presentation.Http.AotSmokeTests/PANiXiDA.Core.Presentation.Http.AotSmokeTests.csproj" />
+    <Project Path="tests/PANiXiDA.Core.Presentation.Http.AotSmoke/PANiXiDA.Core.Presentation.Http.AotSmoke.csproj" />
     <Project Path="tests/PANiXiDA.Core.Presentation.Http.UnitTests/PANiXiDA.Core.Presentation.Http.UnitTests.csproj" />
   </Folder>
 </Solution>

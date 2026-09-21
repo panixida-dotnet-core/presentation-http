@@ -223,11 +223,11 @@ The consuming application must enable the Request Delegate Generator in every en
 </PropertyGroup>
 ```
 
-`PANiXiDA.Core.Presentation.Http.AotSmokeTests` exercises generated registration, constructor injection, configuration, versioned routes, JSON, validation, exception handling and module OpenAPI documents. It registers the individual services explicitly to exclude the unsupported MVC ApiExplorer setup. CI publishes and runs this application as a native Linux executable. It does not certify the full `AddHttp` path or every application-specific DTO/handler.
+`PANiXiDA.Core.Presentation.Http.AotSmoke` exercises generated registration, constructor injection, configuration, versioned routes, JSON, validation, exception handling and module OpenAPI documents. It registers the individual services explicitly to exclude the unsupported MVC ApiExplorer setup. CI publishes and runs this application as a native Linux executable. It does not certify the full `AddHttp` path or every application-specific DTO/handler.
 
 ```powershell
-dotnet publish tests/PANiXiDA.Core.Presentation.Http.AotSmokeTests -c Release -r win-x64 -o ./artifacts/aot
-./artifacts/aot/PANiXiDA.Core.Presentation.Http.AotSmokeTests.exe
+dotnet publish tests/PANiXiDA.Core.Presentation.Http.AotSmoke -c Release -r win-x64 -o ./artifacts/aot
+./artifacts/aot/PANiXiDA.Core.Presentation.Http.AotSmoke.exe
 ```
 
 Native compilation requires the platform toolchain, including Visual Studio C++ build tools on Windows. See the [ASP.NET Core Native AOT documentation](https://learn.microsoft.com/aspnet/core/fundamentals/native-aot?view=aspnetcore-10.0).
@@ -409,7 +409,7 @@ src/
     Helpers/
     Middlewares/
 tests/
-  PANiXiDA.Core.Presentation.Http.AotSmokeTests/
+  PANiXiDA.Core.Presentation.Http.AotSmoke/
   PANiXiDA.Core.Presentation.Http.UnitTests/
 ```
 

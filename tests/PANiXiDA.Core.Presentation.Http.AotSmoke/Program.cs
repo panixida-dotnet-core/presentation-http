@@ -3,7 +3,7 @@ using Asp.Versioning;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 
-using PANiXiDA.Core.Presentation.Http.AotSmokeTests;
+using PANiXiDA.Core.Presentation.Http.AotSmoke;
 using PANiXiDA.Core.Presentation.Http.Configurations;
 using PANiXiDA.Core.Presentation.Http.DependencyInjection;
 using PANiXiDA.Core.Presentation.Http.Middlewares;

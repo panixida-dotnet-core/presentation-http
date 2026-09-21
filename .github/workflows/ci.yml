@@ -42,9 +42,9 @@ jobs:
               with:
                   dotnet-version: '10.0.x'
             - name: Publish Native AOT smoke tests
-              run: dotnet publish tests/PANiXiDA.Core.Presentation.Http.AotSmokeTests -c Release -r linux-x64 -o "${{ runner.temp }}/http-aot"
+              run: dotnet publish tests/PANiXiDA.Core.Presentation.Http.AotSmoke -c Release -r linux-x64 -o "${{ runner.temp }}/http-aot"
             - name: Run Native AOT smoke tests
-              run: '"${{ runner.temp }}/http-aot/PANiXiDA.Core.Presentation.Http.AotSmokeTests"'
+              run: '"${{ runner.temp }}/http-aot/PANiXiDA.Core.Presentation.Http.AotSmoke"'
 
     publish:
       if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}

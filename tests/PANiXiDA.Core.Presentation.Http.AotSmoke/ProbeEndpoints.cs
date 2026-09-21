@@ -5,7 +5,7 @@ using PANiXiDA.Core.Presentation.Http.Endpoints;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 
-namespace PANiXiDA.Core.Presentation.Http.AotSmokeTests;
+namespace PANiXiDA.Core.Presentation.Http.AotSmoke;
 
 internal sealed class ProbeGroup : IEndpointGroup
 {
