@@ -1,7 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
-namespace PANiXiDA.Core.Presentation.Http.Generators;
+namespace PANiXiDA.Core.Presentation.Http.Generators.Endpoints;
 
 internal static class ConstructorFactoryBuilder
 {

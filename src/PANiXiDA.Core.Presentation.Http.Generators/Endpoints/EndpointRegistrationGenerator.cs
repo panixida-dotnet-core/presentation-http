@@ -5,7 +5,7 @@ using Microsoft.CodeAnalysis.Text;
 using System.Collections.Immutable;
 using System.Text;
 
-namespace PANiXiDA.Core.Presentation.Http.Generators;
+namespace PANiXiDA.Core.Presentation.Http.Generators.Endpoints;
 
 /// <summary>
 /// Generates endpoint discovery results and constructor factories for the consuming assembly.

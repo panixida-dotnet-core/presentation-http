@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 
 using PANiXiDA.Core.Presentation.Http.Endpoints;
-using PANiXiDA.Core.Presentation.Http.Generators;
+using PANiXiDA.Core.Presentation.Http.Generators.Endpoints;
 
 using System.Runtime.Loader;
 

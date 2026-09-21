@@ -399,6 +399,9 @@ The default API version is `1.0`, and the version must be present in the route.
 ```text
 src/
   PANiXiDA.Core.Presentation.Http.Generators/
+    Endpoints/
+      ConstructorFactoryBuilder.cs
+      EndpointRegistrationGenerator.cs
   PANiXiDA.Core.Presentation.Http/
     Configurations/
     DependencyInjection/
