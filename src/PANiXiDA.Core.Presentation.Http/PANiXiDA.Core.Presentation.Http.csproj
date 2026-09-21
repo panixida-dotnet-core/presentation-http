@@ -33,7 +33,6 @@
 
     <ItemGroup>
         <InternalsVisibleTo Include="PANiXiDA.Core.Presentation.Http.UnitTests" />
-        <InternalsVisibleTo Include="PANiXiDA.Core.Presentation.Http.AotSmoke" />
     </ItemGroup>
 
     <ItemGroup>
