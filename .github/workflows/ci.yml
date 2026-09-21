@@ -61,6 +61,12 @@ jobs:
                     --get "${SONAR_HOST_URL}/api/qualitygates/project_status" \
                     --data-urlencode "projectKey=${SONAR_PROJECT_KEY}" \
                     | jq '.projectStatus | {status, conditions}'
+                  curl --fail --silent --show-error --user "${SONAR_TOKEN}:" \
+                    --get "${SONAR_HOST_URL}/api/issues/search" \
+                    --data-urlencode "componentKeys=${SONAR_PROJECT_KEY}" \
+                    --data-urlencode "resolved=false" \
+                    --data-urlencode "ps=100" \
+                    | jq '.issues[] | {rule, message, component, line}'
 
     publish:
       if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}

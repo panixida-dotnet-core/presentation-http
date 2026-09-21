@@ -215,6 +215,8 @@ The runtime project enables `IsAotCompatible`. Our endpoint discovery and constr
 
 The standard `AddHttp` setup still calls `Asp.Versioning.Mvc.ApiExplorer` `10.0.1`, whose `AddApiExplorer()` registers MVC and is marked `RequiresUnreferencedCode`. Both public `AddHttp` overloads propagate that restriction. A warning-free library build is not a claim that this dependency path is AOT-compatible.
 
+A separate consumer of the packaged library was published with `PublishTrimmed=true`: it reported `IL2026` at `AddHttp` and failed during startup in MVC `ApplicationPartManager`, which dynamically loads `Asp.Versioning.OpenApi`. Supporting the full setup requires replacing or isolating this MVC explorer integration and verifying API-version substitution in OpenAPI documents. The annotations expose the restriction; they do not fix it.
+
 The consuming application must enable the Request Delegate Generator in every endpoint project, register a `JsonSerializerContext` for its request/response DTOs, and register validation in the appropriate assembly. Source generation does not remove all reflection inside ASP.NET Core, DI, API Versioning, Scalar, or their generators; those are dependency-owned paths.
 
 ```xml
