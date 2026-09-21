@@ -15,26 +15,27 @@ public sealed class EndpointRegistrationGenerator : IIncrementalGenerator
 {
     private const string RegistryName = "PANiXiDA.Core.Presentation.Http.Endpoints.EndpointRegistry";
     private const string ContractsNamespace = "PANiXiDA.Core.Presentation.Http.Endpoints.";
+    private const string DiagnosticCategory = "EndpointRegistration";
 
     private static readonly DiagnosticDescriptor UnsupportedType = new(
         "PANHTTPSG001", "Endpoint registration requires accessible closed types",
         "Endpoint or group '{0}' must be a non-generic type accessible from generated code; private, protected and file-local types are not supported",
-        "EndpointRegistration", DiagnosticSeverity.Error, true);
+        DiagnosticCategory, DiagnosticSeverity.Error, true);
 
     private static readonly DiagnosticDescriptor AmbiguousConstructor = new(
         "PANHTTPSG002", "Endpoint activation requires an unambiguous constructor",
         "Endpoint or group '{0}' must have one public constructor or exactly one public constructor marked with ActivatorUtilitiesConstructorAttribute",
-        "EndpointRegistration", DiagnosticSeverity.Error, true);
+        DiagnosticCategory, DiagnosticSeverity.Error, true);
 
     private static readonly DiagnosticDescriptor UnsupportedConstructor = new(
         "PANHTTPSG003", "Endpoint constructor cannot be generated",
         "Constructor of '{0}' must have accessible by-value parameter types and initialize required members; keyed service keys must be compile-time constants",
-        "EndpointRegistration", DiagnosticSeverity.Error, true);
+        DiagnosticCategory, DiagnosticSeverity.Error, true);
 
     private static readonly DiagnosticDescriptor ExternalGroup = new(
         "PANHTTPSG004", "Endpoint and group must share an assembly",
         "Endpoint '{0}' and group '{1}' must be declared in the same assembly",
-        "EndpointRegistration", DiagnosticSeverity.Error, true);
+        DiagnosticCategory, DiagnosticSeverity.Error, true);
 
     /// <summary>
     /// Registers semantic discovery of concrete endpoint and group implementations.

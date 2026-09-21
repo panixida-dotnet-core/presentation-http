@@ -41,19 +41,19 @@ public static class EndpointRegistry
     internal static void MapGroups(IEndpointRouteBuilder endpoints, Assembly assembly)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
-        GetRegistration(assembly).MapGroups(endpoints);
+        GetRegistration(assembly).MapGroupRoutes(endpoints);
     }
 
     internal static IEndpointGroup CreateGroup<TGroup>(IServiceProvider services)
         where TGroup : IEndpointGroup
     {
-        return GetRegistration(typeof(TGroup).Assembly).CreateGroup(typeof(TGroup), services);
+        return GetRegistration(typeof(TGroup).Assembly).GroupFactory(typeof(TGroup), services);
     }
 
     internal static IReadOnlyList<IEndpoint> CreateEndpoints<TGroup>(IServiceProvider services)
         where TGroup : IEndpointGroup
     {
-        return GetRegistration(typeof(TGroup).Assembly).CreateEndpoints(typeof(TGroup), services);
+        return GetRegistration(typeof(TGroup).Assembly).EndpointFactory(typeof(TGroup), services);
     }
 
     private static Registration GetRegistration(Assembly assembly)
@@ -73,7 +73,7 @@ public static class EndpointRegistry
     }
 
     private sealed record Registration(
-        Action<IEndpointRouteBuilder> MapGroups,
-        Func<Type, IServiceProvider, IEndpointGroup> CreateGroup,
-        Func<Type, IServiceProvider, IReadOnlyList<IEndpoint>> CreateEndpoints);
+        Action<IEndpointRouteBuilder> MapGroupRoutes,
+        Func<Type, IServiceProvider, IEndpointGroup> GroupFactory,
+        Func<Type, IServiceProvider, IReadOnlyList<IEndpoint>> EndpointFactory);
 }
