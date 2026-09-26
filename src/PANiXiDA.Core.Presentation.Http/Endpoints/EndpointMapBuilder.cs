@@ -5,11 +5,12 @@ using Microsoft.AspNetCore.Routing;
 namespace PANiXiDA.Core.Presentation.Http.Endpoints;
 
 /// <summary>
-/// Provides route mapping helpers for a single endpoint route.
+/// Provides a route builder with automatic name and summary defaults for a single endpoint.
 /// </summary>
-public sealed class EndpointMapBuilder
+public sealed class EndpointMapBuilder : IEndpointRouteBuilder
 {
     private readonly RouteGroupBuilder group;
+    private readonly IEndpointRouteBuilder routeBuilder;
     private readonly string route;
     private readonly string name;
     private readonly string summary;
@@ -29,6 +30,9 @@ public sealed class EndpointMapBuilder
         this.route = route;
         this.name = name;
         this.summary = summary;
+        routeBuilder = group.MapGroup(string.Empty)
+            .WithName(name)
+            .WithSummary(summary);
     }
 
     /// <summary>
@@ -75,82 +79,28 @@ public sealed class EndpointMapBuilder
         }
     }
 
-    /// <summary>
-    /// Maps the endpoint route to an HTTP GET handler.
-    /// </summary>
-    /// <param name="handler">The route handler.</param>
-    /// <returns>The route handler builder for the mapped endpoint.</returns>
-    public RouteHandlerBuilder MapGet(Delegate handler)
-    {
-        ArgumentNullException.ThrowIfNull(handler);
+    /// <inheritdoc />
+    IServiceProvider IEndpointRouteBuilder.ServiceProvider => routeBuilder.ServiceProvider;
 
-        return ApplyEndpointMetadata(group.MapGet(route, handler));
+    /// <inheritdoc />
+    ICollection<EndpointDataSource> IEndpointRouteBuilder.DataSources => routeBuilder.DataSources;
+
+    /// <inheritdoc />
+    IApplicationBuilder IEndpointRouteBuilder.CreateApplicationBuilder()
+    {
+        return routeBuilder.CreateApplicationBuilder();
     }
 
     /// <summary>
-    /// Maps the endpoint route to an HTTP POST handler.
+    /// Applies the endpoint name and summary to a directly mapped ASP.NET Core route handler.
+    /// Call standard Map methods at the handler declaration so the Request Delegate Generator can inspect it.
     /// </summary>
-    /// <param name="handler">The route handler.</param>
-    /// <returns>The route handler builder for the mapped endpoint.</returns>
-    public RouteHandlerBuilder MapPost(Delegate handler)
+    /// <param name="builder">The mapped route handler builder.</param>
+    /// <returns>The route handler builder with endpoint metadata.</returns>
+    public RouteHandlerBuilder ApplyMetadata(RouteHandlerBuilder builder)
     {
-        ArgumentNullException.ThrowIfNull(handler);
+        ArgumentNullException.ThrowIfNull(builder);
 
-        return ApplyEndpointMetadata(group.MapPost(route, handler));
-    }
-
-    /// <summary>
-    /// Maps the endpoint route to an HTTP PUT handler.
-    /// </summary>
-    /// <param name="handler">The route handler.</param>
-    /// <returns>The route handler builder for the mapped endpoint.</returns>
-    public RouteHandlerBuilder MapPut(Delegate handler)
-    {
-        ArgumentNullException.ThrowIfNull(handler);
-
-        return ApplyEndpointMetadata(group.MapPut(route, handler));
-    }
-
-    /// <summary>
-    /// Maps the endpoint route to an HTTP PATCH handler.
-    /// </summary>
-    /// <param name="handler">The route handler.</param>
-    /// <returns>The route handler builder for the mapped endpoint.</returns>
-    public RouteHandlerBuilder MapPatch(Delegate handler)
-    {
-        ArgumentNullException.ThrowIfNull(handler);
-
-        return ApplyEndpointMetadata(group.MapPatch(route, handler));
-    }
-
-    /// <summary>
-    /// Maps the endpoint route to an HTTP DELETE handler.
-    /// </summary>
-    /// <param name="handler">The route handler.</param>
-    /// <returns>The route handler builder for the mapped endpoint.</returns>
-    public RouteHandlerBuilder MapDelete(Delegate handler)
-    {
-        ArgumentNullException.ThrowIfNull(handler);
-
-        return ApplyEndpointMetadata(group.MapDelete(route, handler));
-    }
-
-    /// <summary>
-    /// Maps the endpoint route to the specified HTTP methods.
-    /// </summary>
-    /// <param name="httpMethods">The HTTP methods supported by the endpoint.</param>
-    /// <param name="handler">The route handler.</param>
-    /// <returns>The route handler builder for the mapped endpoint.</returns>
-    public RouteHandlerBuilder MapMethods(IEnumerable<string> httpMethods, Delegate handler)
-    {
-        ArgumentNullException.ThrowIfNull(httpMethods);
-        ArgumentNullException.ThrowIfNull(handler);
-
-        return ApplyEndpointMetadata(group.MapMethods(route, httpMethods, handler));
-    }
-
-    private RouteHandlerBuilder ApplyEndpointMetadata(RouteHandlerBuilder builder)
-    {
         return builder
             .WithName(name)
             .WithSummary(summary);

@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Builder;
+
 using PANiXiDA.Core.Presentation.Http.Endpoints;
 using PANiXiDA.Core.Presentation.Http.UnitTests.Endpoints.Fixtures.Groups;
 
@@ -22,6 +24,6 @@ public sealed class EndpointWithComparableInterface :
     {
         EndpointMappingRecorder.Add(nameof(EndpointWithComparableInterface));
 
-        builder.MapGet(static () => "comparable");
+        builder.MapGet(builder.Route, static () => "comparable");
     }
 }

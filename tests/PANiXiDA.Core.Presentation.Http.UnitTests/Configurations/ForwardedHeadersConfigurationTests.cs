@@ -6,6 +6,8 @@ using Microsoft.Extensions.Options;
 
 using PANiXiDA.Core.Presentation.Http.Configurations;
 
+using System.Net;
+
 namespace PANiXiDA.Core.Presentation.Http.UnitTests.Configurations;
 
 public sealed class ForwardedHeadersConfigurationTests
@@ -86,6 +88,117 @@ public sealed class ForwardedHeadersConfigurationTests
 
         options.ForwardedHeaders.ShouldBe(ForwardedHeaders.XForwardedHost);
         options.ForwardLimit.ShouldBe(5);
+    }
+
+    [Fact(DisplayName = "Forwarded headers binding preserves header names, proxy addresses and network lists")]
+    public void AddForwardedHeadersConfiguration_ShouldBindHeadersAndTrustedNetworks()
+    {
+        var services = new ServiceCollection();
+        var configuration = CreateConfiguration(new Dictionary<string, string?>
+        {
+            ["ForwardedHeaders:ForwardedForHeaderName"] = "Custom-For",
+            ["ForwardedHeaders:ForwardedHostHeaderName"] = "Custom-Host",
+            ["ForwardedHeaders:ForwardedProtoHeaderName"] = "Custom-Proto",
+            ["ForwardedHeaders:ForwardedPrefixHeaderName"] = "Custom-Prefix",
+            ["ForwardedHeaders:OriginalForHeaderName"] = "Original-For",
+            ["ForwardedHeaders:OriginalHostHeaderName"] = "Original-Host",
+            ["ForwardedHeaders:OriginalProtoHeaderName"] = "Original-Proto",
+            ["ForwardedHeaders:OriginalPrefixHeaderName"] = "Original-Prefix",
+            ["ForwardedHeaders:KnownProxies:0"] = "192.0.2.1",
+            ["ForwardedHeaders:KnownIPNetworks:0:Prefix"] = "10.0.0.0",
+            ["ForwardedHeaders:KnownIPNetworks:0:PrefixLength"] = "8",
+            ["ForwardedHeaders:KnownNetworks:0:Prefix"] = "192.168.0.0",
+            ["ForwardedHeaders:KnownNetworks:0:PrefixLength"] = "16",
+            ["ForwardedHeaders:ForwardLimit"] = null
+        });
+
+        services.AddForwardedHeadersConfiguration(configuration);
+        var options = CreateOptions(services);
+
+        options.ForwardedForHeaderName.ShouldBe("Custom-For");
+        options.ForwardedHostHeaderName.ShouldBe("Custom-Host");
+        options.ForwardedProtoHeaderName.ShouldBe("Custom-Proto");
+        options.ForwardedPrefixHeaderName.ShouldBe("Custom-Prefix");
+        options.OriginalForHeaderName.ShouldBe("Original-For");
+        options.OriginalHostHeaderName.ShouldBe("Original-Host");
+        options.OriginalProtoHeaderName.ShouldBe("Original-Proto");
+        options.OriginalPrefixHeaderName.ShouldBe("Original-Prefix");
+        options.KnownProxies.ShouldBe([IPAddress.Parse("192.0.2.1")]);
+        options.KnownIPNetworks.ShouldBe([
+            System.Net.IPNetwork.Parse("10.0.0.0/8"),
+            System.Net.IPNetwork.Parse("192.168.0.0/16")
+        ]);
+        options.ForwardLimit.ShouldBeNull();
+    }
+
+    [Fact(DisplayName = "Forwarded headers binding preserves option configuration and reload notifications")]
+    public void AddForwardedHeadersConfiguration_ShouldPreserveDefaultsAndReload()
+    {
+        var services = new ServiceCollection();
+        services.Configure<ForwardedHeadersOptions>(options =>
+        {
+            options.OriginalHostHeaderName = "Previous-Host";
+            options.AllowedHosts.Add("previous.example");
+        });
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ForwardedHeaders:ForwardLimit"] = "2",
+                ["ForwardedHeaders:AllowedHosts:0"] = "current.example"
+            })
+            .Build();
+        services.AddForwardedHeadersConfiguration(configuration);
+        using var provider = services.BuildServiceProvider();
+        var monitor = provider.GetRequiredService<IOptionsMonitor<ForwardedHeadersOptions>>();
+        monitor.CurrentValue.ForwardLimit.ShouldBe(2);
+
+        configuration["ForwardedHeaders:ForwardLimit"] = "4";
+        configuration.Reload();
+
+        monitor.CurrentValue.ForwardLimit.ShouldBe(4);
+        monitor.CurrentValue.OriginalHostHeaderName.ShouldBe("Previous-Host");
+        monitor.CurrentValue.AllowedHosts.ShouldBe(["previous.example", "current.example"]);
+    }
+
+    [Fact(DisplayName = "Forwarded headers binding preserves unspecified options and accepts case-insensitive keys")]
+    public void AddForwardedHeadersConfiguration_ShouldPreserveUnspecifiedOptions()
+    {
+        var services = new ServiceCollection();
+        services.Configure<ForwardedHeadersOptions>(options =>
+        {
+            options.ForwardLimit = 7;
+            options.ForwardedForHeaderName = "Previous-For";
+            options.RequireHeaderSymmetry = true;
+        });
+        var configuration = CreateConfiguration(new Dictionary<string, string?>
+        {
+            ["forwardedheaders:forwardedhostheadername"] = "Custom-Host"
+        });
+
+        services.AddForwardedHeadersConfiguration(configuration);
+        var options = CreateOptions(services);
+
+        options.ForwardLimit.ShouldBe(7);
+        options.ForwardedForHeaderName.ShouldBe("Previous-For");
+        options.ForwardedHostHeaderName.ShouldBe("Custom-Host");
+        options.RequireHeaderSymmetry.ShouldBeTrue();
+    }
+
+    [Theory(DisplayName = "Forwarded headers binding rejects invalid proxy and network values")]
+    [InlineData("KnownProxies:0", "invalid-address")]
+    [InlineData("KnownIPNetworks:0:Prefix", "invalid-address")]
+    public void AddForwardedHeadersConfiguration_ShouldRejectInvalidTrustConfiguration(
+        string key,
+        string value)
+    {
+        var services = new ServiceCollection();
+        var configuration = CreateConfiguration(new Dictionary<string, string?>
+        {
+            ["ForwardedHeaders:" + key] = value
+        });
+        services.AddForwardedHeadersConfiguration(configuration);
+
+        Should.Throw<FormatException>(() => CreateOptions(services));
     }
 
     private static ForwardedHeadersOptions CreateOptions(IServiceCollection services)

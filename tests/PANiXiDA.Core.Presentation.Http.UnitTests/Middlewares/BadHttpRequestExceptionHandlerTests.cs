@@ -41,11 +41,26 @@ public sealed class BadHttpRequestExceptionHandlerTests
 
         using var document = ReadResponseBody(httpContext);
         var root = document.RootElement;
-        root.GetProperty("title").GetString().ShouldBe("Bad Request");
-        root.GetProperty("status").GetInt32().ShouldBe(StatusCodes.Status400BadRequest);
-        root.GetProperty("detail").GetString().ShouldBe("Failed to read the request body.");
-        root.GetProperty("traceId").GetString().ShouldBe(activity.Id);
-        root.GetProperty("activityTraceId").GetString().ShouldBe(activity.TraceId.ToString());
+        root
+            .GetProperty("title")
+            .GetString()
+            .ShouldBe("Bad Request");
+        root
+            .GetProperty("status")
+            .GetInt32()
+            .ShouldBe(StatusCodes.Status400BadRequest);
+        root
+            .GetProperty("detail")
+            .GetString()
+            .ShouldBe("Failed to read the request body.");
+        root
+            .GetProperty("traceId")
+            .GetString()
+            .ShouldBe(activity.Id);
+        root
+            .GetProperty("activityTraceId")
+            .GetString()
+            .ShouldBe(activity.TraceId.ToString());
 
         var logEntry = logger.Entries.ShouldHaveSingleItem();
         logEntry.LogLevel.ShouldBe(LogLevel.Warning);

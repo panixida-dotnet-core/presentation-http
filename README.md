@@ -15,26 +15,30 @@ It provides common Minimal API endpoint conventions, API versioning, OpenAPI set
 ## Features
 
 - `AddHttp` registers the default HTTP presentation services.
-- `UseHttp` adds the default middleware pipeline and maps discovered endpoint groups.
+- `UseHttp` adds the default middleware pipeline and maps source-generated endpoint registrations.
 - JSON numeric values use strict number handling.
-- Module assemblies can be mapped to separate OpenAPI documents and Scalar sources through the `HttpModules` configuration section.
+- Module assemblies can be mapped to separate OpenAPI documents and Scalar sources for each API version through the `HttpModules` configuration section.
 - Health checks are registered by `AddHttp` and exposed at `/health` by `UseHttp`.
 - `IEndpointGroup` defines route, resource name, and API version metadata for Minimal API endpoint groups.
 - `IEndpoint<TGroup>` defines route, name, and summary metadata for endpoints that belong to a specific group.
-- `EndpointMapper` discovers and maps endpoints in a deterministic type-name order.
+- The bundled source generator registers endpoints in deterministic type-name order.
 - `EndpointConstants.EndpointPrefix` defines `/api/v{version:apiVersion}`.
 - `ResultHttpMapper` maps `Result` and `Result<T>` to `IResult`.
 
 ## Requirements
 
-- .NET 10 SDK.
+- .NET 10 SDK 10.0.401 or later.
 - ASP.NET Core Minimal API application.
+
+Full Native AOT support is currently blocked by API Versioning's OpenAPI/MVC integration.
 
 ## Installation
 
+Reference the package in each endpoint project with its analyzer assets enabled.
+
 ```xml
 <ItemGroup>
-  <PackageReference Include="PANiXiDA.Core.Presentation.Http" Version="2.0.0" />
+  <PackageReference Include="PANiXiDA.Core.Presentation.Http" Version="3.0.0" />
 </ItemGroup>
 ```
 
@@ -46,6 +50,7 @@ using PANiXiDA.Core.Presentation.Http.DependencyInjection;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddHttp(builder.Configuration);
+builder.Services.AddValidation();
 
 var app = builder.Build();
 
@@ -53,6 +58,8 @@ app.UseHttp(typeof(Program).Assembly);
 
 app.Run();
 ```
+
+Call `AddValidation()` in each endpoint/DTO assembly to generate validation metadata for its DTO properties. `AddHttp` registers the shared validation services.
 
 ## Forwarded Headers
 
@@ -66,7 +73,7 @@ ForwardedHeaders.XForwardedProto
 
 The package also clears the default loopback-only `KnownIPNetworks` and `KnownProxies` restrictions so applications behind Kubernetes ingress or Gateway API proxies can process forwarded headers without per-service proxy registration.
 
-Additional values can be bound from the standard ASP.NET Core `ForwardedHeadersOptions` model by adding a `ForwardedHeaders` section to the application configuration.
+Configure the standard `ForwardedHeadersOptions` values through the `ForwardedHeaders` section.
 
 ```json
 {
@@ -80,6 +87,8 @@ Additional values can be bound from the standard ASP.NET Core `ForwardedHeadersO
   }
 }
 ```
+
+`KnownIPNetworks` and the legacy `KnownNetworks` key accept objects such as `{ "Prefix": "10.0.0.0", "PrefixLength": 8 }`. Invalid addresses and networks are rejected; configuration reload is supported.
 
 For stricter trust boundaries, configure `ForwardedHeadersOptions` directly after `AddHttp`.
 
@@ -141,7 +150,7 @@ public sealed class OrdersEndpointGroup : IEndpointGroup
 The final route prefix is `/api/v{version}/orders`.
 
 Groups that require a custom root route can map their endpoints through an explicit `RouteGroupBuilder`.
-The registered HTTP module metadata is attached to custom groups as well, so their endpoints remain available in the corresponding module OpenAPI document.
+Custom groups retain their HTTP module metadata for OpenAPI documents.
 
 ```csharp
 public void Map(IEndpointRouteBuilder endpoints)
@@ -160,7 +169,10 @@ public void Map(IEndpointRouteBuilder endpoints)
 An endpoint implements `IEndpoint<TGroup>`, where `TGroup` is the endpoint group it belongs to.
 Endpoint metadata is declared as public properties so it can be required by the interface and applied by `EndpointMapper`.
 
+Keep each group and its endpoints in the same assembly. Use non-generic `public` or `internal` classes with one public constructor; for multiple constructors, mark one with `[ActivatorUtilitiesConstructor]`. Dependencies are resolved from DI, including keyed services and optional parameters.
+
 ```csharp
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 
 using PANiXiDA.Core.Presentation.Http.Endpoints;
@@ -175,15 +187,17 @@ public sealed class GetOrderEndpoint : IEndpoint<OrdersEndpointGroup>
 
     public void Map(EndpointMapBuilder builder)
     {
-        builder.MapGet((Guid id) =>
-            {
-                return TypedResults.Ok(new OrderResponse(id));
-            });
+        builder.MapGet(builder.Route, (Guid id) =>
+        {
+            return TypedResults.Ok(new OrderResponse(id));
+        });
     }
 }
 
 public sealed record OrderResponse(Guid Id);
 ```
+
+Use standard ASP.NET Core mapping methods, for example `builder.MapGet(builder.Route, Handle)` or `builder.MapMethods(builder.Route, ["HEAD", "OPTIONS"], Handle)`. Name and summary are applied automatically; standard endpoint conventions can override them.
 
 ## Result Mapping
 
@@ -250,7 +264,7 @@ String properties and enums configured for string serialization are unaffected.
 
 In `Development`, `UseHttp` exposes:
 
-- OpenAPI document at `/openapi/v1.json`;
+- OpenAPI documents at `/openapi/v1.json`, `/openapi/v2.json`, and so on for the mapped API versions;
 - Scalar API reference at `/scalar`.
 
 OpenAPI registration also enables Scalar transformers for Scalar-specific document extensions.
@@ -278,7 +292,7 @@ client generators expose `Fields` as a string collection. JSON request and respo
 
 ### Module documents
 
-Applications composed from multiple presentation modules can expose one OpenAPI document per module.
+Applications composed from multiple presentation modules expose one OpenAPI document per module and API version.
 Register the presentation assemblies in code and configure their document names and display titles in `appsettings.json`.
 `UseHttp` automatically maps endpoint groups from registered module assemblies.
 
@@ -317,15 +331,16 @@ Both `Name` and `Title` are required for every registered module assembly.
 }
 ```
 
-This configuration exposes:
+For Identity endpoints in versions 1 and 2 and Compendium endpoints in version 1, this configuration exposes:
 
-- `/openapi/identity.json` for Identity endpoints;
-- `/openapi/compendium.json` for Compendium endpoints;
-- `/scalar` with a document selector for both modules.
+- `/openapi/identity-v1.json` with the title `Identity API v1`;
+- `/openapi/identity-v2.json` with the title `Identity API v2`;
+- `/openapi/compendium-v1.json` with the title `Compendium API v1`;
+- `/scalar` with a selector for these three documents.
 
-OpenAPI documents are filtered by module metadata while API version metadata remains independent.
-Document names are compared case-insensitively, and a presentation assembly can belong to only one module.
-When no modules are registered, the existing combined `/openapi/v1.json` document remains the default.
+Routes without a version appear in every document of their module. A module with only unversioned routes uses a common document, such as `/openapi/identity.json`. Empty modules produce no documents.
+Final document names must be unique ignoring case, including common module documents and versioned documents. A presentation assembly can belong to only one module.
+Without modules, documents are named by version (`v1`, `v2`, and so on); an application with only unversioned endpoints uses `v1`.
 
 The Scalar browser tab title can be configured from application configuration.
 If the title is not configured or is blank, Scalar uses its default document title.
@@ -354,6 +369,7 @@ The default API version is `1.0`, and the version must be present in the route.
 
 ```text
 src/
+  PANiXiDA.Core.Presentation.Http.Generators/
   PANiXiDA.Core.Presentation.Http/
     Configurations/
     DependencyInjection/
@@ -395,6 +411,7 @@ Quality Gate succeeds.
 The NuGet package includes:
 
 - compiled library for `net10.0`;
+- the Roslyn generator for `netstandard2.0`, packaged under `analyzers/dotnet/cs`;
 - XML documentation;
 - README;
 - package icon;

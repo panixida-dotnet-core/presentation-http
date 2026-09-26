@@ -1,7 +1,12 @@
+using Asp.Versioning.ApiExplorer;
+using Asp.Versioning.OpenApi;
+
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Mvc.ApiExplorer;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
@@ -10,38 +15,45 @@ using PANiXiDA.Core.Presentation.Http.Transformers;
 
 using Scalar.AspNetCore;
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace PANiXiDA.Core.Presentation.Http.Configurations;
 
 internal static class OpenApiConfiguration
 {
+    [RequiresUnreferencedCode(ApiVersioningConfiguration.TrimmingMessage)]
     internal static IServiceCollection AddOpenApiConfiguration(
         this IServiceCollection services,
         IConfiguration configuration,
         IReadOnlyList<HttpModule> modules)
     {
-        if (modules.Count == 0)
-        {
-            services.AddOpenApi(options =>
+        services.AddApiVersioning()
+            .AddOpenApi();
+        services.AddSingleton<IConfigureOptions<VersionedOpenApiOptions>>(serviceProvider =>
+            new ConfigureNamedOptions<VersionedOpenApiOptions>(
+                null,
+                options =>
             {
-                options.AddScalarTransformers();
-                options.AddOperationTransformer<SortFieldArrayOpenApiOperationTransformer>();
-            });
-        }
-        else
-        {
-            foreach (var moduleName in modules.Select(static module => module.Name))
-            {
-                services.AddOpenApi(moduleName, options =>
+                var documents = serviceProvider.GetRequiredService<HttpModuleApiVersionDescriptionProvider>();
+                options.Document.AddScalarTransformers();
+                options.Document.AddOperationTransformer<SortFieldArrayOpenApiOperationTransformer>();
+                options.Document.ShouldInclude = description =>
+                    documents.ShouldInclude(description, options.Description);
+                options.Document.AddDocumentTransformer((document, _, _) =>
                 {
-                    options.AddScalarTransformers();
-                    options.AddOperationTransformer<SortFieldArrayOpenApiOperationTransformer>();
-                    options.ShouldInclude = description =>
-                    {
-                        return ShouldInclude(description, moduleName);
-                    };
+                    document.Info.Title = documents.GetDocumentTitle(options.Description);
+
+                    return Task.CompletedTask;
                 });
-            }
-        }
+            }));
+
+        services.AddSingleton(serviceProvider => new HttpModuleApiVersionDescriptionProvider(
+            serviceProvider.GetRequiredService<IApiVersionDescriptionProviderFactory>()
+                .Create(serviceProvider.GetRequiredService<EndpointDataSource>()),
+            serviceProvider.GetRequiredService<IApiDescriptionGroupCollectionProvider>(),
+            modules));
+        services.Replace(ServiceDescriptor.Singleton<IApiVersionDescriptionProvider>(serviceProvider =>
+            serviceProvider.GetRequiredService<HttpModuleApiVersionDescriptionProvider>()));
 
         services.Configure<ScalarConfiguration>(
             configuration.GetSection(nameof(ScalarConfiguration)));
@@ -57,10 +69,8 @@ internal static class OpenApiConfiguration
                 .GetRequiredService<IOptions<ScalarConfiguration>>()
                 .Value;
             var scalarTitle = scalarConfiguration.Title;
-            var moduleRegistry = app.Services.GetService<HttpModuleRegistry>();
-            var modules = moduleRegistry?.Modules ?? [];
-
-            app.MapOpenApi();
+            app.MapOpenApi()
+                .WithDocumentPerVersion();
             app.MapScalarApiReference(options =>
             {
                 if (!string.IsNullOrWhiteSpace(scalarTitle))
@@ -68,20 +78,14 @@ internal static class OpenApiConfiguration
                     options.WithTitle(scalarTitle);
                 }
 
-                options.AddDocuments(modules.Select(static module =>
-                    new ScalarDocument(module.Name, module.Title)));
+                var documents = app.Services.GetRequiredService<HttpModuleApiVersionDescriptionProvider>();
+                options.AddDocuments(documents.ApiVersionDescriptions.Select(description =>
+                    new ScalarDocument(
+                        description.GroupName,
+                        documents.GetDocumentTitle(description))));
             });
         }
 
         return app;
-    }
-
-    private static bool ShouldInclude(ApiDescription description, string moduleName)
-    {
-        return description.ActionDescriptor.EndpointMetadata
-            .OfType<HttpModule>()
-            .Any(module => StringComparer.OrdinalIgnoreCase.Equals(
-                module.Name,
-                moduleName));
     }
 }

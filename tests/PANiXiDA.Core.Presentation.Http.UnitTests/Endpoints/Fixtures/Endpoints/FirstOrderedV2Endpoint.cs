@@ -5,18 +5,16 @@ using PANiXiDA.Core.Presentation.Http.UnitTests.Endpoints.Fixtures.Groups;
 
 namespace PANiXiDA.Core.Presentation.Http.UnitTests.Endpoints.Fixtures.Endpoints;
 
-public sealed class FirstOrderedEndpoint : IEndpoint<OrderedEndpointGroup>
+public sealed class FirstOrderedV2Endpoint : IEndpoint<OrderedV2EndpointGroup>
 {
     public string Route { get; } = "/first";
 
-    public string Name { get; } = "FirstOrdered";
+    public string Name { get; } = "FirstOrderedV2";
 
-    public string Summary { get; } = "Gets the first ordered endpoint.";
+    public string Summary { get; } = "Gets the first ordered endpoint for version two.";
 
     public void Map(EndpointMapBuilder builder)
     {
-        EndpointMappingRecorder.Add(nameof(FirstOrderedEndpoint));
-
-        builder.MapGet(builder.Route, static () => "first");
+        builder.MapGet(builder.Route, static () => "first-v2");
     }
 }

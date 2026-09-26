@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Builder;
+
 using PANiXiDA.Core.Presentation.Http.Endpoints;
 using PANiXiDA.Core.Presentation.Http.UnitTests.Endpoints.Fixtures.Groups;
 
@@ -15,6 +17,6 @@ public sealed class SecondOrderedEndpoint : IEndpoint<OrderedEndpointGroup>
     {
         EndpointMappingRecorder.Add(nameof(SecondOrderedEndpoint));
 
-        builder.MapGet(static () => "second");
+        builder.MapGet(builder.Route, static () => "second");
     }
 }
