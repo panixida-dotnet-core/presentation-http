@@ -140,7 +140,9 @@ public sealed class EndpointMapperTests
             .Select(static endpoint => endpoint.RoutePattern.RawText)];
     }
 
-    private static RouteEndpoint GetRouteEndpoint(WebApplication app, string routePattern)
+    private static RouteEndpoint GetRouteEndpoint(
+        WebApplication app,
+        string routePattern)
     {
         return ((IEndpointRouteBuilder)app).DataSources
             .SelectMany(static dataSource => dataSource.Endpoints)

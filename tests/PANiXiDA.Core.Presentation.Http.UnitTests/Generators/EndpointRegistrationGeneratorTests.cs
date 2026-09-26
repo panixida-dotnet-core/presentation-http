@@ -109,7 +109,11 @@ public sealed class EndpointRegistrationGeneratorTests
     [InlineData("public class Group : Base { public Group([Microsoft.Extensions.DependencyInjection.FromKeyedServices] object value) { } }", "", "", "PANHTTPSG003")]
     [InlineData("public class Group : Base { public Group([Microsoft.Extensions.DependencyInjection.FromKeyedServices(new int[] { 1 })] object value) { } }", "", "", "PANHTTPSG003")]
     [InlineData("public class Group : Base { [Microsoft.Extensions.DependencyInjection.ActivatorUtilitiesConstructor] public Group() { } [Microsoft.Extensions.DependencyInjection.ActivatorUtilitiesConstructor] public Group(string value) { } }", "", "", "PANHTTPSG002")]
-    public void Generate_ShouldDiagnoseUnsupportedTypes(string declaration, string prefix, string suffix, string diagnostic)
+    public void Generate_ShouldDiagnoseUnsupportedTypes(
+        string declaration,
+        string prefix,
+        string suffix,
+        string diagnostic)
     {
         var source = GroupBaseSource + prefix + declaration + suffix;
 
@@ -139,7 +143,9 @@ public sealed class EndpointRegistrationGeneratorTests
     [Theory(DisplayName = "Endpoint generator diagnoses incomplete constructor code without crashing during editing")]
     [InlineData("public Group([Microsoft.Extensions.DependencyInjection.FromKeyedServices(Unknown)] object value) { }", "CS0103")]
     [InlineData("private class Dependency { } public Group(Dependency value) { }", "CS0051")]
-    public void Generate_ShouldHandleInvalidConstructorSource(string members, string compilerDiagnostic)
+    public void Generate_ShouldHandleInvalidConstructorSource(
+        string members,
+        string compilerDiagnostic)
     {
         var source = GroupBaseSource + "public class Group : Base { " + members + " }";
 
@@ -151,7 +157,9 @@ public sealed class EndpointRegistrationGeneratorTests
     [Theory(DisplayName = "Generated factories initialize an untouched assembly and resolve keyed and optional constructor dependencies")]
     [InlineData(false, "services3fallback")]
     [InlineData(true, "registered3fallback")]
-    public void GeneratedRegistration_ShouldInitializeAssemblyAndResolveDependencies(bool registerOverride, string expected)
+    public void GeneratedRegistration_ShouldInitializeAssemblyAndResolveDependencies(
+        bool registerOverride,
+        string expected)
     {
         var source = GroupBaseSource + """
             public sealed class Group : Base
@@ -159,7 +167,11 @@ public sealed class EndpointRegistrationGeneratorTests
                 private readonly System.Collections.Generic.List<string> calls;
                 public Group() { throw new System.InvalidOperationException("Wrong constructor"); }
                 [Microsoft.Extensions.DependencyInjection.ActivatorUtilitiesConstructor]
-                public Group([Microsoft.Extensions.DependencyInjection.FromKeyedServices("calls")] System.Collections.Generic.List<string> calls, string tag = "services", int count = 3, [Microsoft.Extensions.DependencyInjection.FromKeyedServices("missing")] string keyed = "fallback")
+                public Group(
+                    [Microsoft.Extensions.DependencyInjection.FromKeyedServices("calls")] System.Collections.Generic.List<string> calls,
+                    string tag = "services",
+                    int count = 3,
+                    [Microsoft.Extensions.DependencyInjection.FromKeyedServices("missing")] string keyed = "fallback")
                 {
                     this.calls = calls;
                     calls.Add(tag + count + keyed);
@@ -286,8 +298,11 @@ public sealed class EndpointRegistrationGeneratorTests
         }
         """;
 
-    private static (GeneratorDriverRunResult Result, Compilation Compilation) Compile(string source, string? expectedDiagnostic = null,
-        MetadataReference? additionalReference = null, string? expectedCompilerDiagnostic = null)
+    private static (GeneratorDriverRunResult Result, Compilation Compilation) Compile(
+        string source,
+        string? expectedDiagnostic = null,
+        MetadataReference? additionalReference = null,
+        string? expectedCompilerDiagnostic = null)
     {
         var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Preview);
         var compilation = CSharpCompilation.Create("GeneratedEndpoints_" + Guid.NewGuid().ToString("N"),

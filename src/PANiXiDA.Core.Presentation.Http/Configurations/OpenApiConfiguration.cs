@@ -76,7 +76,9 @@ internal static class OpenApiConfiguration
         return app;
     }
 
-    private static bool ShouldInclude(ApiDescription description, string moduleName)
+    private static bool ShouldInclude(
+        ApiDescription description,
+        string moduleName)
     {
         return description.ActionDescriptor.EndpointMetadata
             .OfType<HttpModule>()

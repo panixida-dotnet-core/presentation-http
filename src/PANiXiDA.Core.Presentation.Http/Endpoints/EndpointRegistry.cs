@@ -38,7 +38,9 @@ public static class EndpointRegistry
         Registrations.Add(assembly, new Registration(mapGroups, createGroup, createEndpoints));
     }
 
-    internal static void MapGroups(IEndpointRouteBuilder endpoints, Assembly assembly)
+    internal static void MapGroups(
+        IEndpointRouteBuilder endpoints,
+        Assembly assembly)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
         GetRegistration(assembly).MapGroupRoutes(endpoints);

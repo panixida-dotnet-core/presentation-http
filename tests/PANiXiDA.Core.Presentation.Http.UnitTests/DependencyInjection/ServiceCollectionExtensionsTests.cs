@@ -414,7 +414,9 @@ public sealed class ServiceCollectionExtensionsTests
         return values;
     }
 
-    private sealed record TestPayload(int Count, TestStatus Status);
+    private sealed record TestPayload(
+        int Count,
+        TestStatus Status);
 
     private sealed record RequestPayload(Guid Id);
 

@@ -130,7 +130,9 @@ public sealed class EndpointMapBuilderTests
         return new EndpointMapBuilder(group, "/{id:guid}", "UpdateUser", "Updates a user.");
     }
 
-    private static RouteEndpoint GetRouteEndpoint(WebApplication app, string routePattern)
+    private static RouteEndpoint GetRouteEndpoint(
+        WebApplication app,
+        string routePattern)
     {
         return ((IEndpointRouteBuilder)app).DataSources
             .SelectMany(static dataSource => dataSource.Endpoints)

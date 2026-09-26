@@ -53,7 +53,10 @@ public sealed class EndpointRegistrationGenerator : IIncrementalGenerator
             Generate(output, input.Left, input.Right));
     }
 
-    private static void Generate(SourceProductionContext context, ImmutableArray<INamedTypeSymbol?> candidates, Compilation compilation)
+    private static void Generate(
+        SourceProductionContext context,
+        ImmutableArray<INamedTypeSymbol?> candidates,
+        Compilation compilation)
     {
         var registry = compilation.GetTypeByMetadataName(RegistryName);
         var groupContract = compilation.GetTypeByMetadataName(ContractsNamespace + "IEndpointGroup");
@@ -107,8 +110,12 @@ public sealed class EndpointRegistrationGenerator : IIncrementalGenerator
         context.AddSource("EndpointRegistrations.g.cs", SourceText.From(BuildSource(groups, endpoints, factories), Encoding.UTF8));
     }
 
-    private static void AddEndpoints(SourceProductionContext context, Compilation compilation, INamedTypeSymbol type,
-        INamedTypeSymbol[] contracts, Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>> endpoints)
+    private static void AddEndpoints(
+        SourceProductionContext context,
+        Compilation compilation,
+        INamedTypeSymbol type,
+        INamedTypeSymbol[] contracts,
+        Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>> endpoints)
     {
         foreach (var contract in contracts)
         {
@@ -129,7 +136,9 @@ public sealed class EndpointRegistrationGenerator : IIncrementalGenerator
         }
     }
 
-    private static bool IsSupportedType(INamedTypeSymbol type, Compilation compilation)
+    private static bool IsSupportedType(
+        INamedTypeSymbol type,
+        Compilation compilation)
     {
         if (type.IsRefLikeType)
         {
@@ -159,8 +168,10 @@ public sealed class EndpointRegistrationGenerator : IIncrementalGenerator
             : type.ContainingNamespace.ToDisplayString() + "." + type.MetadataName;
     }
 
-    private static string BuildSource(List<INamedTypeSymbol> groups,
-        Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>> endpoints, Dictionary<INamedTypeSymbol, string> factories)
+    private static string BuildSource(
+        List<INamedTypeSymbol> groups,
+        Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>> endpoints,
+        Dictionary<INamedTypeSymbol, string> factories)
     {
         var mapGroups = new StringBuilder();
         var createGroups = new StringBuilder();
@@ -207,13 +218,17 @@ public sealed class EndpointRegistrationGenerator : IIncrementalGenerator
             {{mapGroups}}
                 }
 
-                private static global::{{ContractsNamespace}}IEndpointGroup CreateGroup(global::System.Type groupType, global::System.IServiceProvider services)
+                private static global::{{ContractsNamespace}}IEndpointGroup CreateGroup(
+                    global::System.Type groupType,
+                    global::System.IServiceProvider services)
                 {
             {{createGroups}}
                     throw new global::System.InvalidOperationException($"Generated factory was not found for endpoint group '{groupType.FullName}'.");
                 }
 
-                private static global::System.Collections.Generic.IReadOnlyList<global::{{ContractsNamespace}}IEndpoint> CreateEndpoints(global::System.Type groupType, global::System.IServiceProvider services)
+                private static global::System.Collections.Generic.IReadOnlyList<global::{{ContractsNamespace}}IEndpoint> CreateEndpoints(
+                    global::System.Type groupType,
+                    global::System.IServiceProvider services)
                 {
             {{createEndpoints}}
                     return global::System.Array.Empty<global::{{ContractsNamespace}}IEndpoint>();

@@ -158,7 +158,9 @@ public sealed class ForwardedHeadersConfigurationTests
     [Theory(DisplayName = "Generated forwarded headers binding rejects invalid proxy and network values")]
     [InlineData("KnownProxies:0", "invalid-address")]
     [InlineData("KnownIPNetworks:0:Prefix", "invalid-address")]
-    public void AddForwardedHeadersConfiguration_ShouldRejectInvalidTrustConfiguration(string key, string value)
+    public void AddForwardedHeadersConfiguration_ShouldRejectInvalidTrustConfiguration(
+        string key,
+        string value)
     {
         var services = new ServiceCollection();
         var configuration = CreateConfiguration(new Dictionary<string, string?> { ["ForwardedHeaders:" + key] = value });

@@ -56,7 +56,10 @@ public sealed class SortingOpenApiTests
     [InlineData("/renamed?sort=name:desc&sort=department.name", HttpStatusCode.OK, 2)]
     [InlineData("/sorting?Fields=name:wrong", HttpStatusCode.BadRequest, 0)]
     [InlineData("/sorting?Fields=name:desc,department.name:asc", HttpStatusCode.BadRequest, 0)]
-    public async Task Request_WhenSortingIsProvided_BindsWireFormat(string path, HttpStatusCode status, int count)
+    public async Task Request_WhenSortingIsProvided_BindsWireFormat(
+        string path,
+        HttpStatusCode status,
+        int count)
     {
         await using var app = await CreateApplicationAsync(false);
         using var client = CreateClient(app);
@@ -93,7 +96,10 @@ public sealed class SortingOpenApiTests
         description.ShouldContain("field[:asc|desc]");
     }
 
-    private static JsonElement GetParameter(JsonDocument document, string path, string name)
+    private static JsonElement GetParameter(
+        JsonDocument document,
+        string path,
+        string name)
     {
         return document.RootElement.GetProperty("paths").GetProperty(path).GetProperty("get")
             .GetProperty("parameters").EnumerateArray().Single(parameter => parameter.GetProperty("name").GetString() == name);

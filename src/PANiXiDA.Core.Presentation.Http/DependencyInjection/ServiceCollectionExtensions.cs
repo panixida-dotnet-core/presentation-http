@@ -76,7 +76,9 @@ public static class ServiceCollectionExtensions
     /// <param name="app">The ASP.NET Core application instance.</param>
     /// <param name="assemblies">The assemblies containing generated endpoint registrations.</param>
     /// <returns>The original application instance for further configuration.</returns>
-    public static WebApplication UseHttp(this WebApplication app, params Assembly[] assemblies)
+    public static WebApplication UseHttp(
+        this WebApplication app,
+        params Assembly[] assemblies)
     {
         app.UseForwardedHeadersConfiguration();
         app.UseExceptionHandler();

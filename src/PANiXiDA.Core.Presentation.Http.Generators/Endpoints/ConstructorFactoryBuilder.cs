@@ -5,8 +5,12 @@ namespace PANiXiDA.Core.Presentation.Http.Generators.Endpoints;
 
 internal static class ConstructorFactoryBuilder
 {
-    internal static string? Build(SourceProductionContext context, Compilation compilation, INamedTypeSymbol type,
-        DiagnosticDescriptor ambiguousConstructor, DiagnosticDescriptor unsupportedConstructor)
+    internal static string? Build(
+        SourceProductionContext context,
+        Compilation compilation,
+        INamedTypeSymbol type,
+        DiagnosticDescriptor ambiguousConstructor,
+        DiagnosticDescriptor unsupportedConstructor)
     {
         var constructors = type.InstanceConstructors.Where(item => item.DeclaredAccessibility == Accessibility.Public).ToArray();
         var attribute = compilation.GetTypeByMetadataName("Microsoft.Extensions.DependencyInjection.ActivatorUtilitiesConstructorAttribute");
@@ -53,7 +57,9 @@ internal static class ConstructorFactoryBuilder
         return "new " + type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + "(" + string.Join(", ", arguments) + ")";
     }
 
-    private static string? BuildArgument(IParameterSymbol parameter, Compilation compilation)
+    private static string? BuildArgument(
+        IParameterSymbol parameter,
+        Compilation compilation)
     {
         var typeName = parameter.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         var serviceKeyAttribute = compilation.GetTypeByMetadataName("Microsoft.Extensions.DependencyInjection.ServiceKeyAttribute");
@@ -95,7 +101,10 @@ internal static class ConstructorFactoryBuilder
         return "(" + typeName + ")(" + resolve + " ?? (object?)" + defaultValue + ")!";
     }
 
-    private static bool HasUninitializedRequiredMembers(INamedTypeSymbol type, IMethodSymbol constructor, Compilation compilation)
+    private static bool HasUninitializedRequiredMembers(
+        INamedTypeSymbol type,
+        IMethodSymbol constructor,
+        Compilation compilation)
     {
         var attribute = compilation.GetTypeByMetadataName("System.Diagnostics.CodeAnalysis.SetsRequiredMembersAttribute");
         if (constructor.GetAttributes().Any(value => SymbolEqualityComparer.Default.Equals(value.AttributeClass, attribute)))
