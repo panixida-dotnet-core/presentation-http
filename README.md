@@ -71,7 +71,7 @@ ForwardedHeaders.XForwardedProto
 
 The package also clears the default loopback-only `KnownIPNetworks` and `KnownProxies` restrictions so applications behind Kubernetes ingress or Gateway API proxies can process forwarded headers without per-service proxy registration.
 
-Forwarded header names, original header names, `ForwardedHeaders`, `ForwardLimit`, `RequireHeaderSymmetry`, `AllowedHosts`, `KnownProxies`, and network lists can be supplied through a `ForwardedHeaders` section. A generated binder reads an internal settings model and applies it to `ForwardedHeadersOptions`; no reflection-based configuration binding is used.
+Forwarded header names, original header names, `ForwardedHeaders`, `ForwardLimit`, `RequireHeaderSymmetry`, `AllowedHosts`, `KnownProxies`, and network lists can be supplied through a `ForwardedHeaders` section. Configuration values are applied directly to the standard `ForwardedHeadersOptions`, without an intermediate settings model. Scalar and string-array reads use generated binding; IP addresses and networks use explicit parsing, without reflection-based configuration binding.
 
 ```json
 {

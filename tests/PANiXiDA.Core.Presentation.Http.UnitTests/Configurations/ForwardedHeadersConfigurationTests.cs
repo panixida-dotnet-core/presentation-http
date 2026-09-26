@@ -90,7 +90,7 @@ public sealed class ForwardedHeadersConfigurationTests
         options.ForwardLimit.ShouldBe(5);
     }
 
-    [Fact(DisplayName = "Generated forwarded headers binding preserves header names, proxy addresses and network lists")]
+    [Fact(DisplayName = "Forwarded headers binding preserves header names, proxy addresses and network lists")]
     public void AddForwardedHeadersConfiguration_ShouldBindHeadersAndTrustedNetworks()
     {
         var services = new ServiceCollection();
@@ -131,7 +131,7 @@ public sealed class ForwardedHeadersConfigurationTests
         options.ForwardLimit.ShouldBeNull();
     }
 
-    [Fact(DisplayName = "Generated forwarded headers binding preserves option configuration and reload notifications")]
+    [Fact(DisplayName = "Forwarded headers binding preserves option configuration and reload notifications")]
     public void AddForwardedHeadersConfiguration_ShouldPreserveDefaultsAndReload()
     {
         var services = new ServiceCollection();
@@ -160,7 +160,31 @@ public sealed class ForwardedHeadersConfigurationTests
         monitor.CurrentValue.AllowedHosts.ShouldBe(["previous.example", "current.example"]);
     }
 
-    [Theory(DisplayName = "Generated forwarded headers binding rejects invalid proxy and network values")]
+    [Fact(DisplayName = "Forwarded headers binding preserves unspecified options and accepts case-insensitive keys")]
+    public void AddForwardedHeadersConfiguration_ShouldPreserveUnspecifiedOptions()
+    {
+        var services = new ServiceCollection();
+        services.Configure<ForwardedHeadersOptions>(options =>
+        {
+            options.ForwardLimit = 7;
+            options.ForwardedForHeaderName = "Previous-For";
+            options.RequireHeaderSymmetry = true;
+        });
+        var configuration = CreateConfiguration(new Dictionary<string, string?>
+        {
+            ["forwardedheaders:forwardedhostheadername"] = "Custom-Host"
+        });
+
+        services.AddForwardedHeadersConfiguration(configuration);
+        var options = CreateOptions(services);
+
+        options.ForwardLimit.ShouldBe(7);
+        options.ForwardedForHeaderName.ShouldBe("Previous-For");
+        options.ForwardedHostHeaderName.ShouldBe("Custom-Host");
+        options.RequireHeaderSymmetry.ShouldBeTrue();
+    }
+
+    [Theory(DisplayName = "Forwarded headers binding rejects invalid proxy and network values")]
     [InlineData("KnownProxies:0", "invalid-address")]
     [InlineData("KnownIPNetworks:0:Prefix", "invalid-address")]
     public void AddForwardedHeadersConfiguration_ShouldRejectInvalidTrustConfiguration(
