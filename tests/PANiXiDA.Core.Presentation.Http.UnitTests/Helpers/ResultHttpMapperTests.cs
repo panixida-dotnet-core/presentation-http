@@ -143,7 +143,9 @@ public sealed class ResultHttpMapperTests
     };
     }
 
-    private static Error CreateError(ErrorType errorType, string message)
+    private static Error CreateError(
+        ErrorType errorType,
+        string message)
     {
         return errorType switch
         {
@@ -157,7 +159,9 @@ public sealed class ResultHttpMapperTests
         };
     }
 
-    private static ProblemDetails AssertProblem(IResult httpResult, int expectedStatusCode)
+    private static ProblemDetails AssertProblem(
+        IResult httpResult,
+        int expectedStatusCode)
     {
         httpResult.ShouldBeAssignableTo<IStatusCodeHttpResult>()
             .StatusCode.ShouldBe(expectedStatusCode);

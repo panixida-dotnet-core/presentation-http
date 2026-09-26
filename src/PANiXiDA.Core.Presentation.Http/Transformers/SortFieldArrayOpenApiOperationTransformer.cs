@@ -29,7 +29,10 @@ internal sealed class SortFieldArrayOpenApiOperationTransformer : IOpenApiOperat
                 continue;
             }
 
-            parameter.Description ??= ParameterDescription;
+            if (string.IsNullOrWhiteSpace(parameter.Description))
+            {
+                parameter.Description = ParameterDescription;
+            }
             parameter.Required = false;
             parameter.Style = ParameterStyle.Form;
             parameter.Explode = true;

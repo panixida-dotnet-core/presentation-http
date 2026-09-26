@@ -62,7 +62,8 @@ public sealed class EndpointMapperTests
 
         var firstEndpoint = GetRouteEndpoint(app, "/api/v{version:apiVersion}/ordered/first");
         firstEndpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName.ShouldBe("FirstOrdered");
-        firstEndpoint.Metadata.GetMetadata<IEndpointSummaryMetadata>()?.Summary.ShouldBe("Gets the first ordered endpoint.");
+        firstEndpoint.Metadata.GetMetadata<IEndpointSummaryMetadata>()?
+            .Summary.ShouldBe("Gets the first ordered endpoint.");
     }
 
     [Fact(DisplayName = "MapGroupEndpoints maps endpoints without an HTTP module registry")]
@@ -103,6 +104,7 @@ public sealed class EndpointMapperTests
         metadata.Name.ShouldBe("tests");
         metadata.Title.ShouldBe("Test endpoints");
         metadata.PresentationAssembly.ShouldBeSameAs(moduleAssembly);
+        firstEndpoint.Metadata.GetMetadata<IEndpointGroupNameMetadata>()?.EndpointGroupName.ShouldBe("tests");
     }
 
     [Fact(DisplayName = "MapGroupEndpoints attaches the HTTP module to custom route groups")]
@@ -140,7 +142,9 @@ public sealed class EndpointMapperTests
             .Select(static endpoint => endpoint.RoutePattern.RawText)];
     }
 
-    private static RouteEndpoint GetRouteEndpoint(WebApplication app, string routePattern)
+    private static RouteEndpoint GetRouteEndpoint(
+        WebApplication app,
+        string routePattern)
     {
         return ((IEndpointRouteBuilder)app).DataSources
             .SelectMany(static dataSource => dataSource.Endpoints)

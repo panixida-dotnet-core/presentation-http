@@ -5,12 +5,10 @@ using Microsoft.Extensions.DependencyInjection;
 
 using PANiXiDA.Core.Presentation.Http.Modularity;
 
-using System.Reflection;
-
 namespace PANiXiDA.Core.Presentation.Http.Endpoints;
 
 /// <summary>
-/// Discovers and maps endpoints that belong to the specified endpoint group.
+/// Maps source-generated endpoint registrations for the specified endpoint group.
 /// </summary>
 public static class EndpointMapper
 {
@@ -25,9 +23,10 @@ public static class EndpointMapper
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
-        var endpointGroup = ActivatorUtilities.CreateInstance<TGroup>(endpoints.ServiceProvider);
+        var endpointGroup = EndpointRegistry.CreateGroup<TGroup>(endpoints.ServiceProvider);
         var apiVersion = endpointGroup.ApiVersion;
-        var apiVersionSet = endpoints.NewApiVersionSet(endpointGroup.Name)
+        var apiVersionSet = endpoints
+            .NewApiVersionSet(endpointGroup.Name)
             .HasApiVersion(apiVersion)
             .ReportApiVersions()
             .Build();
@@ -45,7 +44,7 @@ public static class EndpointMapper
     }
 
     /// <summary>
-    /// Attaches registered HTTP module metadata to the specified route group, finds endpoints for <typeparamref name="TGroup"/>, creates them through the service provider, and maps them to the group.
+    /// Attaches HTTP module metadata and maps the generated endpoint factories for <typeparamref name="TGroup"/>.
     /// </summary>
     /// <typeparam name="TGroup">The endpoint group type.</typeparam>
     /// <param name="group">The route group to map endpoints to.</param>
@@ -55,22 +54,19 @@ public static class EndpointMapper
         IServiceProvider serviceProvider)
         where TGroup : IEndpointGroup
     {
+        ArgumentNullException.ThrowIfNull(group);
+        ArgumentNullException.ThrowIfNull(serviceProvider);
+
         var moduleRegistry = serviceProvider.GetService<HttpModuleRegistry>();
 
         if (moduleRegistry is not null &&
             moduleRegistry.TryGetModule(typeof(TGroup).Assembly, out var module))
         {
             group.WithMetadata(module);
+            group.WithGroupName(module.Name);
         }
 
-        var endpointTypes = GetEndpointTypes(typeof(TGroup).Assembly, typeof(TGroup));
-        var endpoints = new List<IEndpoint>();
-
-        foreach (var endpointType in endpointTypes)
-        {
-            var endpoint = (IEndpoint)ActivatorUtilities.CreateInstance(serviceProvider, endpointType);
-            endpoints.Add(endpoint);
-        }
+        var endpoints = EndpointRegistry.CreateEndpoints<TGroup>(serviceProvider);
 
         foreach (var endpoint in endpoints)
         {
@@ -81,50 +77,5 @@ public static class EndpointMapper
                 endpoint.Summary);
             endpoint.Map(endpointMapBuilder);
         }
-    }
-
-    private static List<Type> GetEndpointTypes(Assembly assembly, Type groupType)
-    {
-        var result = new List<Type>();
-
-        foreach (var type in assembly.GetTypes())
-        {
-            if (type.IsAbstract || type.IsInterface)
-            {
-                continue;
-            }
-
-            var interfaces = type.GetInterfaces();
-
-            foreach (var interfaceType in interfaces)
-            {
-                if (!interfaceType.IsGenericType)
-                {
-                    continue;
-                }
-
-                if (interfaceType.GetGenericTypeDefinition() != typeof(IEndpoint<>))
-                {
-                    continue;
-                }
-
-                var genericArguments = interfaceType.GetGenericArguments();
-
-                if (genericArguments[0] != groupType)
-                {
-                    continue;
-                }
-
-                result.Add(type);
-                break;
-            }
-        }
-
-        result.Sort(static (left, right) =>
-        {
-            return StringComparer.Ordinal.Compare(left.FullName, right.FullName);
-        });
-
-        return result;
     }
 }

@@ -14,20 +14,48 @@ public sealed class SortFieldArrayOpenApiOperationTransformerTests
     [Fact(DisplayName = "Sorting transformer preserves custom descriptions and unrelated parameters")]
     public async Task TransformAsync_WhenParametersHaveMetadata_PreservesCustomizations()
     {
-        var sorting = new OpenApiParameter { Name = "sort", In = ParameterLocation.Query, Description = "Custom sorting description" };
+        var sorting = new OpenApiParameter
+        {
+            Name = "sort",
+            In = ParameterLocation.Query,
+            Description = "Custom sorting description"
+        };
         var unrelated = new OpenApiParameter { Name = "page", In = ParameterLocation.Query, Required = true };
         var header = new OpenApiParameter { Name = "sort", In = ParameterLocation.Header, Required = true };
         var nameless = new OpenApiParameter { In = ParameterLocation.Query, Required = true };
         var reference = new OpenApiParameterReference("Shared");
         var operation = new OpenApiOperation { Parameters = [sorting, unrelated, header, nameless, reference] };
         var description = new ApiDescription();
-        description.ParameterDescriptions.Add(new ApiParameterDescription { Name = "sort", Source = BindingSource.Query, Type = typeof(SortField[]) });
-        description.ParameterDescriptions.Add(new ApiParameterDescription { Name = "page", Source = BindingSource.Query, Type = typeof(int) });
-        description.ParameterDescriptions.Add(new ApiParameterDescription { Name = "sort", Source = BindingSource.Header, Type = typeof(SortField[]) });
+        description.ParameterDescriptions.Add(new ApiParameterDescription
+        {
+            Name = "sort",
+            Source = BindingSource.Query,
+            Type = typeof(SortField[])
+        });
+        description.ParameterDescriptions.Add(new ApiParameterDescription
+        {
+            Name = "page",
+            Source = BindingSource.Query,
+            Type = typeof(int)
+        });
+        description.ParameterDescriptions.Add(new ApiParameterDescription
+        {
+            Name = "sort",
+            Source = BindingSource.Header,
+            Type = typeof(SortField[])
+        });
         using var services = new ServiceCollection().BuildServiceProvider();
-        var context = new OpenApiOperationTransformerContext { DocumentName = "v1", Description = description, ApplicationServices = services };
+        var context = new OpenApiOperationTransformerContext
+        {
+            DocumentName = "v1",
+            Description = description,
+            ApplicationServices = services
+        };
 
-        await new SortFieldArrayOpenApiOperationTransformer().TransformAsync(operation, context, TestContext.Current.CancellationToken);
+        await new SortFieldArrayOpenApiOperationTransformer().TransformAsync(
+            operation,
+            context,
+            TestContext.Current.CancellationToken);
 
         sorting.Description.ShouldBe("Custom sorting description");
         sorting.Required.ShouldBeFalse();
@@ -48,9 +76,17 @@ public sealed class SortFieldArrayOpenApiOperationTransformerTests
     {
         var operation = new OpenApiOperation { Parameters = emptyCollection ? [] : null };
         using var services = new ServiceCollection().BuildServiceProvider();
-        var context = new OpenApiOperationTransformerContext { DocumentName = "v1", Description = new ApiDescription(), ApplicationServices = services };
+        var context = new OpenApiOperationTransformerContext
+        {
+            DocumentName = "v1",
+            Description = new ApiDescription(),
+            ApplicationServices = services
+        };
 
-        await new SortFieldArrayOpenApiOperationTransformer().TransformAsync(operation, context, TestContext.Current.CancellationToken);
+        await new SortFieldArrayOpenApiOperationTransformer().TransformAsync(
+            operation,
+            context,
+            TestContext.Current.CancellationToken);
 
         (operation.Parameters?.Count ?? 0).ShouldBe(0);
     }

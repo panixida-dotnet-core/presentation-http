@@ -18,7 +18,7 @@ public sealed class EndpointGroupMapperTests
 
         using var app = builder.Build();
 
-        EndpointGroupMapper.MapDiscoveredGroups(app, typeof(ADiscoveredEndpointGroup).Assembly);
+        EndpointRegistry.MapGroups(app, typeof(ADiscoveredEndpointGroup).Assembly);
 
         EndpointMappingRecorder.Entries.Take(2).ShouldBe([
             nameof(ADiscoveredEndpointGroup),

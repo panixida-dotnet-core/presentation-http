@@ -34,7 +34,9 @@ public sealed class ApiVersioningConfigurationTests
             .GetRequiredService<IOptions<ApiExplorerOptions>>()
             .Value;
 
-        apiExplorerOptions.GroupNameFormat.ShouldBe("'v'V");
+        apiExplorerOptions.GroupNameFormat.ShouldBe("'v'VVV");
+        apiExplorerOptions.FormatGroupName.ShouldNotBeNull();
+        apiExplorerOptions.FormatGroupName("orders", "v2").ShouldBe("orders-v2");
         apiExplorerOptions.SubstituteApiVersionInUrl.ShouldBeTrue();
     }
 }

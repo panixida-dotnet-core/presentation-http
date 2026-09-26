@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Builder;
+
 using PANiXiDA.Core.Presentation.Http.Endpoints;
 using PANiXiDA.Core.Presentation.Http.UnitTests.Endpoints.Fixtures.Groups;
 
@@ -15,6 +17,6 @@ public abstract class AbstractOrderedEndpoint : IEndpoint<OrderedEndpointGroup>
     {
         EndpointMappingRecorder.Add(nameof(AbstractOrderedEndpoint));
 
-        builder.MapGet(static () => "abstract");
+        builder.MapGet(builder.Route, static () => "abstract");
     }
 }

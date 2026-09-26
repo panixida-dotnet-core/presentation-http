@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Builder;
+
 using PANiXiDA.Core.Presentation.Http.Endpoints;
 
 namespace PANiXiDA.Core.Presentation.Http.UnitTests.Endpoints.Fixtures.Endpoints;
@@ -14,6 +16,6 @@ public sealed class NonGenericEndpoint : IEndpoint
     {
         EndpointMappingRecorder.Add(nameof(NonGenericEndpoint));
 
-        builder.MapGet(static () => "non-generic");
+        builder.MapGet(builder.Route, static () => "non-generic");
     }
 }
