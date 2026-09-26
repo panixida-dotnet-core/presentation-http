@@ -44,9 +44,13 @@ internal sealed class ForwardedHeadersSettings
 
     internal void Apply(ForwardedHeadersOptions options)
     {
-        var proxies = KnownProxies.Select(IPAddress.Parse).ToArray();
-        var networks = KnownIPNetworks.Concat(KnownNetworks)
-            .Select(network => new System.Net.IPNetwork(IPAddress.Parse(network.Prefix), network.PrefixLength)).ToArray();
+        var proxies = KnownProxies
+            .Select(IPAddress.Parse)
+            .ToArray();
+        var networks = KnownIPNetworks
+            .Concat(KnownNetworks)
+            .Select(network => new System.Net.IPNetwork(IPAddress.Parse(network.Prefix), network.PrefixLength))
+            .ToArray();
 
         options.ForwardedForHeaderName = ForwardedForHeaderName;
         options.ForwardedHostHeaderName = ForwardedHostHeaderName;

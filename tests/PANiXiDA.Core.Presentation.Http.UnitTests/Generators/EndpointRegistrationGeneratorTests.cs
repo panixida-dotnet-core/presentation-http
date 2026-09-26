@@ -41,7 +41,10 @@ public sealed class EndpointRegistrationGeneratorTests
             """;
 
         var (result, _) = Compile(source);
-        var generated = result.GeneratedTrees.Single().GetText(TestContext.Current.CancellationToken).ToString();
+        var generated = result.GeneratedTrees
+            .Single()
+            .GetText(TestContext.Current.CancellationToken)
+            .ToString();
 
         generated.ShouldContain("new global::Group(");
         generated.ShouldContain("new global::Endpoint(");
@@ -83,7 +86,10 @@ public sealed class EndpointRegistrationGeneratorTests
             """;
 
         var (result, _) = Compile(source);
-        var generated = result.GeneratedTrees.Single().GetText(TestContext.Current.CancellationToken).ToString();
+        var generated = result.GeneratedTrees
+            .Single()
+            .GetText(TestContext.Current.CancellationToken)
+            .ToString();
 
         generated.ShouldNotContain("new global::GroupBase");
         generated.ShouldNotContain("new global::Unrelated");
@@ -137,7 +143,11 @@ public sealed class EndpointRegistrationGeneratorTests
 
         var (result, _) = Compile(source, "PANHTTPSG001");
 
-        result.GeneratedTrees.Single().GetText(TestContext.Current.CancellationToken).ToString().ShouldNotContain("typeof(global::Group)");
+        result.GeneratedTrees
+            .Single()
+            .GetText(TestContext.Current.CancellationToken)
+            .ToString()
+            .ShouldNotContain("typeof(global::Group)");
     }
 
     [Theory(DisplayName = "Endpoint generator diagnoses incomplete constructor code without crashing during editing")]
@@ -184,7 +194,9 @@ public sealed class EndpointRegistrationGeneratorTests
             """;
         var (_, compilation) = Compile(source);
         using var stream = new MemoryStream();
-        compilation.Emit(stream, cancellationToken: TestContext.Current.CancellationToken).Success.ShouldBeTrue();
+        compilation
+            .Emit(stream, cancellationToken: TestContext.Current.CancellationToken).Success
+            .ShouldBeTrue();
         stream.Position = 0;
         var loadContext = new AssemblyLoadContext(Guid.NewGuid().ToString(), isCollectible: true);
         var calls = new List<string>();
@@ -213,7 +225,9 @@ public sealed class EndpointRegistrationGeneratorTests
     [Fact(DisplayName = "Endpoint generator ignores projects without the HTTP runtime contract")]
     public void Generate_ShouldIgnoreMissingRuntime()
     {
-        var references = References.Where(reference => !reference.Display!.EndsWith("PANiXiDA.Core.Presentation.Http.dll", StringComparison.OrdinalIgnoreCase));
+        var references = References.Where(reference => !reference.Display!.EndsWith(
+            "PANiXiDA.Core.Presentation.Http.dll",
+            StringComparison.OrdinalIgnoreCase));
         var compilation = CSharpCompilation.Create("NoHttp", references: references,
             options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
@@ -237,7 +251,9 @@ public sealed class EndpointRegistrationGeneratorTests
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
         using var stream = new MemoryStream();
         foreign.Emit(stream, cancellationToken: TestContext.Current.CancellationToken).Success.ShouldBeTrue();
-        var reference = MetadataReference.CreateFromImage(stream.ToArray(), new MetadataReferenceProperties(aliases: ["foreign"]));
+        var reference = MetadataReference.CreateFromImage(
+            stream.ToArray(),
+            new MetadataReferenceProperties(aliases: ["foreign"]));
 
         var (result, _) = Compile("""
             extern alias foreign;
@@ -245,7 +261,10 @@ public sealed class EndpointRegistrationGeneratorTests
             public class Endpoint : foreign::PANiXiDA.Core.Presentation.Http.Endpoints.IEndpoint<Group> { }
             """, additionalReference: reference);
 
-        var generated = result.GeneratedTrees.Single().GetText(TestContext.Current.CancellationToken).ToString();
+        var generated = result.GeneratedTrees
+            .Single()
+            .GetText(TestContext.Current.CancellationToken)
+            .ToString();
         generated.ShouldNotContain("new global::Group(");
         generated.ShouldNotContain("new global::Endpoint(");
     }
@@ -265,7 +284,10 @@ public sealed class EndpointRegistrationGeneratorTests
 
         var (result, _) = Compile(source, "PANHTTPSG004");
 
-        result.Diagnostics.Single().GetMessage().ShouldContain("must be declared in the same assembly");
+        result.Diagnostics
+            .Single()
+            .GetMessage()
+            .ShouldContain("must be declared in the same assembly");
     }
 
     [Fact(DisplayName = "Endpoint generator supports escaped type names and constructors initializing required members")]
@@ -285,7 +307,11 @@ public sealed class EndpointRegistrationGeneratorTests
 
         var (result, _) = Compile(source);
 
-        result.GeneratedTrees.Single().GetText(TestContext.Current.CancellationToken).ToString().ShouldContain("new global::@event.@class(");
+        result.GeneratedTrees
+            .Single()
+            .GetText(TestContext.Current.CancellationToken)
+            .ToString()
+            .ShouldContain("new global::@event.@class(");
     }
 
     private const string GroupBaseSource = """
@@ -306,11 +332,22 @@ public sealed class EndpointRegistrationGeneratorTests
     {
         var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Preview);
         var compilation = CSharpCompilation.Create("GeneratedEndpoints_" + Guid.NewGuid().ToString("N"),
-            [CSharpSyntaxTree.ParseText(source, parseOptions, cancellationToken: TestContext.Current.CancellationToken)],
+            [CSharpSyntaxTree.ParseText(
+                source,
+                parseOptions,
+                cancellationToken: TestContext.Current.CancellationToken)],
             additionalReference is null ? References : References.Append(additionalReference),
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable, allowUnsafe: true));
-        var driver = CSharpGeneratorDriver.Create([new EndpointRegistrationGenerator().AsSourceGenerator()], parseOptions: parseOptions)
-            .RunGeneratorsAndUpdateCompilation(compilation, out var updated, out var diagnostics, TestContext.Current.CancellationToken);
+            new CSharpCompilationOptions(
+                OutputKind.DynamicallyLinkedLibrary,
+                nullableContextOptions: NullableContextOptions.Enable,
+                allowUnsafe: true));
+        var driver = CSharpGeneratorDriver
+            .Create([new EndpointRegistrationGenerator().AsSourceGenerator()], parseOptions: parseOptions)
+            .RunGeneratorsAndUpdateCompilation(
+                compilation,
+                out var updated,
+                out var diagnostics,
+                TestContext.Current.CancellationToken);
         if (expectedDiagnostic is null)
         {
             diagnostics.ShouldBeEmpty();
@@ -319,8 +356,10 @@ public sealed class EndpointRegistrationGeneratorTests
         {
             diagnostics.Select(diagnostic => diagnostic.Id).ShouldBe([expectedDiagnostic]);
         }
-        var compilerErrors = updated.GetDiagnostics(TestContext.Current.CancellationToken)
-            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).Select(diagnostic => diagnostic.Id);
+        var compilerErrors = updated
+            .GetDiagnostics(TestContext.Current.CancellationToken)
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+            .Select(diagnostic => diagnostic.Id);
         compilerErrors.ShouldBe(expectedCompilerDiagnostic is null ? [] : [expectedCompilerDiagnostic]);
         return (driver.GetRunResult(), updated);
     }

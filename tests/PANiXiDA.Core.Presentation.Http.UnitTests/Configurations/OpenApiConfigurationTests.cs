@@ -125,8 +125,14 @@ public sealed class OpenApiConfigurationTests
             .GetProperty("count");
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        countSchema.GetProperty("type").GetString().ShouldBe("integer");
-        countSchema.GetProperty("format").GetString().ShouldBe("int32");
+        countSchema
+            .GetProperty("type")
+            .GetString()
+            .ShouldBe("integer");
+        countSchema
+            .GetProperty("format")
+            .GetString()
+            .ShouldBe("int32");
         countSchema.TryGetProperty("pattern", out _).ShouldBeFalse();
     }
 

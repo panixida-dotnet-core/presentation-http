@@ -18,24 +18,36 @@ public sealed class EndpointRegistrationGenerator : IIncrementalGenerator
     private const string DiagnosticCategory = "EndpointRegistration";
 
     private static readonly DiagnosticDescriptor UnsupportedType = new(
-        "PANHTTPSG001", "Endpoint registration requires accessible closed types",
+        "PANHTTPSG001",
+        "Endpoint registration requires accessible closed types",
         "Endpoint or group '{0}' must be a non-generic type accessible from generated code; private, protected and file-local types are not supported",
-        DiagnosticCategory, DiagnosticSeverity.Error, true);
+        DiagnosticCategory,
+        DiagnosticSeverity.Error,
+        true);
 
     private static readonly DiagnosticDescriptor AmbiguousConstructor = new(
-        "PANHTTPSG002", "Endpoint activation requires an unambiguous constructor",
+        "PANHTTPSG002",
+        "Endpoint activation requires an unambiguous constructor",
         "Endpoint or group '{0}' must have one public constructor or exactly one public constructor marked with ActivatorUtilitiesConstructorAttribute",
-        DiagnosticCategory, DiagnosticSeverity.Error, true);
+        DiagnosticCategory,
+        DiagnosticSeverity.Error,
+        true);
 
     private static readonly DiagnosticDescriptor UnsupportedConstructor = new(
-        "PANHTTPSG003", "Endpoint constructor cannot be generated",
+        "PANHTTPSG003",
+        "Endpoint constructor cannot be generated",
         "Constructor of '{0}' must have accessible by-value parameter types and initialize required members; keyed service keys must be compile-time constants",
-        DiagnosticCategory, DiagnosticSeverity.Error, true);
+        DiagnosticCategory,
+        DiagnosticSeverity.Error,
+        true);
 
     private static readonly DiagnosticDescriptor ExternalGroup = new(
-        "PANHTTPSG004", "Endpoint and group must share an assembly",
+        "PANHTTPSG004",
+        "Endpoint and group must share an assembly",
         "Endpoint '{0}' and group '{1}' must be declared in the same assembly",
-        DiagnosticCategory, DiagnosticSeverity.Error, true);
+        DiagnosticCategory,
+        DiagnosticSeverity.Error,
+        true);
 
     /// <summary>
     /// Registers semantic discovery of concrete endpoint and group implementations.
@@ -43,14 +55,18 @@ public sealed class EndpointRegistrationGenerator : IIncrementalGenerator
     /// <param name="context">The generator initialization context.</param>
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        var types = context.SyntaxProvider.CreateSyntaxProvider(
+        var types = context.SyntaxProvider
+            .CreateSyntaxProvider(
                 static (node, _) => node is TypeDeclarationSyntax { BaseList: not null },
-                static (syntax, token) => syntax.SemanticModel.GetDeclaredSymbol(syntax.Node, token) as INamedTypeSymbol)
+                static (syntax, token) => syntax.SemanticModel.GetDeclaredSymbol(
+                    syntax.Node,
+                    token) as INamedTypeSymbol)
             .Where(static type => type is { TypeKind: TypeKind.Class or TypeKind.Struct, IsAbstract: false })
             .Collect();
 
-        context.RegisterSourceOutput(types.Combine(context.CompilationProvider), static (output, input) =>
-            Generate(output, input.Left, input.Right));
+        context.RegisterSourceOutput(
+            types.Combine(context.CompilationProvider),
+            static (output, input) => Generate(output, input.Left, input.Right));
     }
 
     private static void Generate(
@@ -80,7 +96,9 @@ public sealed class EndpointRegistrationGenerator : IIncrementalGenerator
             }
 
             var isGroup = type.AllInterfaces.Any(item => SymbolEqualityComparer.Default.Equals(item, groupContract));
-            var contracts = type.AllInterfaces.Where(item => SymbolEqualityComparer.Default.Equals(item.OriginalDefinition, endpointContract)).ToArray();
+            var contracts = type.AllInterfaces
+                .Where(item => SymbolEqualityComparer.Default.Equals(item.OriginalDefinition, endpointContract))
+                .ToArray();
             if (!isGroup && contracts.Length == 0)
             {
                 continue;
@@ -88,11 +106,19 @@ public sealed class EndpointRegistrationGenerator : IIncrementalGenerator
 
             if (!IsSupportedType(type, compilation))
             {
-                context.ReportDiagnostic(Diagnostic.Create(UnsupportedType, type.Locations[0], type.ToDisplayString()));
+                context.ReportDiagnostic(Diagnostic.Create(
+                    UnsupportedType,
+                    type.Locations[0],
+                    type.ToDisplayString()));
                 continue;
             }
 
-            var factory = ConstructorFactoryBuilder.Build(context, compilation, type, AmbiguousConstructor, UnsupportedConstructor);
+            var factory = ConstructorFactoryBuilder.Build(
+                context,
+                compilation,
+                type,
+                AmbiguousConstructor,
+                UnsupportedConstructor);
             if (factory is null)
             {
                 continue;
@@ -107,7 +133,9 @@ public sealed class EndpointRegistrationGenerator : IIncrementalGenerator
             AddEndpoints(context, compilation, type, contracts, endpoints);
         }
 
-        context.AddSource("EndpointRegistrations.g.cs", SourceText.From(BuildSource(groups, endpoints, factories), Encoding.UTF8));
+        context.AddSource(
+            "EndpointRegistrations.g.cs",
+            SourceText.From(BuildSource(groups, endpoints, factories), Encoding.UTF8));
     }
 
     private static void AddEndpoints(
@@ -122,7 +150,11 @@ public sealed class EndpointRegistrationGenerator : IIncrementalGenerator
             var group = (INamedTypeSymbol)contract.TypeArguments[0];
             if (!SymbolEqualityComparer.Default.Equals(group.ContainingAssembly, compilation.Assembly))
             {
-                context.ReportDiagnostic(Diagnostic.Create(ExternalGroup, type.Locations[0], type.ToDisplayString(), group.ToDisplayString()));
+                context.ReportDiagnostic(Diagnostic.Create(
+                    ExternalGroup,
+                    type.Locations[0],
+                    type.ToDisplayString(),
+                    group.ToDisplayString()));
                 continue;
             }
 
@@ -179,23 +211,45 @@ public sealed class EndpointRegistrationGenerator : IIncrementalGenerator
         foreach (var group in groups)
         {
             var name = group.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            mapGroups.Append("        ((global::").Append(ContractsNamespace).Append("IEndpointGroup)")
-                .Append(factories[group]).AppendLine(").Map(endpoints);");
-            createGroups.Append("        if (groupType == typeof(").Append(name).AppendLine("))")
-                .AppendLine("        {").Append("            return ").Append(factories[group]).AppendLine(";").AppendLine("        }");
+            mapGroups
+                .Append("        ((global::")
+                .Append(ContractsNamespace)
+                .Append("IEndpointGroup)")
+                .Append(factories[group])
+                .AppendLine(").Map(endpoints);");
+            createGroups
+                .Append("        if (groupType == typeof(")
+                .Append(name)
+                .AppendLine("))")
+                .AppendLine("        {")
+                .Append("            return ")
+                .Append(factories[group])
+                .AppendLine(";")
+                .AppendLine("        }");
         }
 
         foreach (var entry in endpoints.OrderBy(item => GetRuntimeName(item.Key), StringComparer.Ordinal))
         {
-            createEndpoints.Append("        if (groupType == typeof(").Append(entry.Key.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)).AppendLine("))")
-                .AppendLine("        {").Append("            return new global::").Append(ContractsNamespace).AppendLine("IEndpoint[]")
+            createEndpoints
+                .Append("        if (groupType == typeof(")
+                .Append(entry.Key.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
+                .AppendLine("))")
+                .AppendLine("        {")
+                .Append("            return new global::")
+                .Append(ContractsNamespace)
+                .AppendLine("IEndpoint[]")
                 .AppendLine("            {");
             foreach (var endpoint in entry.Value)
             {
-                createEndpoints.Append("                ").Append(factories[endpoint]).AppendLine(",");
+                createEndpoints
+                    .Append("                ")
+                    .Append(factories[endpoint])
+                    .AppendLine(",");
             }
 
-            createEndpoints.AppendLine("            };").AppendLine("        }");
+            createEndpoints
+                .AppendLine("            };")
+                .AppendLine("        }");
         }
 
         return $$"""
@@ -209,7 +263,10 @@ public sealed class EndpointRegistrationGenerator : IIncrementalGenerator
                 internal static void Initialize()
                 {
                     global::{{RegistryName}}.RegisterAssembly(
-                        typeof(GeneratedEndpointRegistrations).Assembly, MapGroups, CreateGroup, CreateEndpoints);
+                        typeof(GeneratedEndpointRegistrations).Assembly,
+                        MapGroups,
+                        CreateGroup,
+                        CreateEndpoints);
                 }
 
                 private static void MapGroups(global::Microsoft.AspNetCore.Routing.IEndpointRouteBuilder endpoints)
@@ -223,7 +280,8 @@ public sealed class EndpointRegistrationGenerator : IIncrementalGenerator
                     global::System.IServiceProvider services)
                 {
             {{createGroups}}
-                    throw new global::System.InvalidOperationException($"Generated factory was not found for endpoint group '{groupType.FullName}'.");
+                    throw new global::System.InvalidOperationException(
+                        $"Generated factory was not found for endpoint group '{groupType.FullName}'.");
                 }
 
                 private static global::System.Collections.Generic.IReadOnlyList<global::{{ContractsNamespace}}IEndpoint> CreateEndpoints(

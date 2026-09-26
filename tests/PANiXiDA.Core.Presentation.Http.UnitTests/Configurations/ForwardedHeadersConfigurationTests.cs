@@ -124,7 +124,10 @@ public sealed class ForwardedHeadersConfigurationTests
         options.OriginalProtoHeaderName.ShouldBe("Original-Proto");
         options.OriginalPrefixHeaderName.ShouldBe("Original-Prefix");
         options.KnownProxies.ShouldBe([IPAddress.Parse("192.0.2.1")]);
-        options.KnownIPNetworks.ShouldBe([System.Net.IPNetwork.Parse("10.0.0.0/8"), System.Net.IPNetwork.Parse("192.168.0.0/16")]);
+        options.KnownIPNetworks.ShouldBe([
+            System.Net.IPNetwork.Parse("10.0.0.0/8"),
+            System.Net.IPNetwork.Parse("192.168.0.0/16")
+        ]);
         options.ForwardLimit.ShouldBeNull();
     }
 
@@ -137,11 +140,13 @@ public sealed class ForwardedHeadersConfigurationTests
             options.OriginalHostHeaderName = "Previous-Host";
             options.AllowedHosts.Add("previous.example");
         });
-        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
-        {
-            ["ForwardedHeaders:ForwardLimit"] = "2",
-            ["ForwardedHeaders:AllowedHosts:0"] = "current.example"
-        }).Build();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ForwardedHeaders:ForwardLimit"] = "2",
+                ["ForwardedHeaders:AllowedHosts:0"] = "current.example"
+            })
+            .Build();
         services.AddForwardedHeadersConfiguration(configuration);
         using var provider = services.BuildServiceProvider();
         var monitor = provider.GetRequiredService<IOptionsMonitor<ForwardedHeadersOptions>>();
@@ -163,7 +168,10 @@ public sealed class ForwardedHeadersConfigurationTests
         string value)
     {
         var services = new ServiceCollection();
-        var configuration = CreateConfiguration(new Dictionary<string, string?> { ["ForwardedHeaders:" + key] = value });
+        var configuration = CreateConfiguration(new Dictionary<string, string?>
+        {
+            ["ForwardedHeaders:" + key] = value
+        });
         services.AddForwardedHeadersConfiguration(configuration);
 
         Should.Throw<FormatException>(() => CreateOptions(services));

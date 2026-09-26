@@ -12,14 +12,34 @@ public sealed class EndpointRegistryTests
     {
         var assembly = typeof(EndpointRegistryTests).Assembly;
 
-        Should.Throw<ArgumentNullException>(() => EndpointRegistry.RegisterAssembly(null!, _ => { }, (_, _) => null!, (_, _) => []))
-            .ParamName.ShouldBe("assembly");
-        Should.Throw<ArgumentNullException>(() => EndpointRegistry.RegisterAssembly(assembly, null!, (_, _) => null!, (_, _) => []))
-            .ParamName.ShouldBe("mapGroups");
-        Should.Throw<ArgumentNullException>(() => EndpointRegistry.RegisterAssembly(assembly, _ => { }, null!, (_, _) => []))
-            .ParamName.ShouldBe("createGroup");
-        Should.Throw<ArgumentNullException>(() => EndpointRegistry.RegisterAssembly(assembly, _ => { }, (_, _) => null!, null!))
-            .ParamName.ShouldBe("createEndpoints");
+        Should.Throw<ArgumentNullException>(() => EndpointRegistry.RegisterAssembly(
+                null!,
+                _ => { },
+                (_, _) => null!,
+                (_, _) => []))
+            .ParamName
+            .ShouldBe("assembly");
+        Should.Throw<ArgumentNullException>(() => EndpointRegistry.RegisterAssembly(
+                assembly,
+                null!,
+                (_, _) => null!,
+                (_, _) => []))
+            .ParamName
+            .ShouldBe("mapGroups");
+        Should.Throw<ArgumentNullException>(() => EndpointRegistry.RegisterAssembly(
+                assembly,
+                _ => { },
+                null!,
+                (_, _) => []))
+            .ParamName
+            .ShouldBe("createGroup");
+        Should.Throw<ArgumentNullException>(() => EndpointRegistry.RegisterAssembly(
+                assembly,
+                _ => { },
+                (_, _) => null!,
+                null!))
+            .ParamName
+            .ShouldBe("createEndpoints");
     }
 
     [Fact(DisplayName = "Generated endpoint registrations reject duplicates")]
@@ -27,7 +47,11 @@ public sealed class EndpointRegistryTests
     {
         var assembly = typeof(EndpointRegistryTests).Assembly;
 
-        Should.Throw<ArgumentException>(() => EndpointRegistry.RegisterAssembly(assembly, _ => { }, (_, _) => null!, (_, _) => []));
+        Should.Throw<ArgumentException>(() => EndpointRegistry.RegisterAssembly(
+            assembly,
+            _ => { },
+            (_, _) => null!,
+            (_, _) => []));
     }
 
     [Fact(DisplayName = "Missing endpoint generation fails with an actionable message")]
@@ -35,12 +59,17 @@ public sealed class EndpointRegistryTests
     {
         using var app = WebApplication.CreateBuilder().Build();
 
-        var exception = Should.Throw<InvalidOperationException>(() => EndpointRegistry.MapGroups(app, typeof(string).Assembly));
+        var exception = Should.Throw<InvalidOperationException>(
+            () => EndpointRegistry.MapGroups(app, typeof(string).Assembly));
 
         exception.Message.ShouldContain("Generated endpoint registration was not found");
         exception.Message.ShouldContain("with its analyzers");
-        Should.Throw<ArgumentNullException>(() => EndpointRegistry.MapGroups(null!, typeof(string).Assembly)).ParamName.ShouldBe("endpoints");
-        Should.Throw<ArgumentNullException>(() => EndpointRegistry.MapGroups(app, null!)).ParamName.ShouldBe("assembly");
+        Should.Throw<ArgumentNullException>(() => EndpointRegistry.MapGroups(null!, typeof(string).Assembly))
+            .ParamName
+            .ShouldBe("endpoints");
+        Should.Throw<ArgumentNullException>(() => EndpointRegistry.MapGroups(app, null!))
+            .ParamName
+            .ShouldBe("assembly");
     }
 
     [Fact(DisplayName = "Generated registration supports groups without endpoints and rejects unknown factories")]
@@ -50,6 +79,7 @@ public sealed class EndpointRegistryTests
 
         EndpointRegistry.CreateEndpoints<ADiscoveredEndpointGroup>(app.Services).ShouldBeEmpty();
         Should.Throw<InvalidOperationException>(() => EndpointRegistry.CreateGroup<IEndpointGroup>(app.Services))
-            .Message.ShouldContain("Generated factory was not found");
+            .Message
+            .ShouldContain("Generated factory was not found");
     }
 }

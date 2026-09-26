@@ -25,7 +25,8 @@ public static class EndpointMapper
 
         var endpointGroup = EndpointRegistry.CreateGroup<TGroup>(endpoints.ServiceProvider);
         var apiVersion = endpointGroup.ApiVersion;
-        var apiVersionSet = endpoints.NewApiVersionSet(endpointGroup.Name)
+        var apiVersionSet = endpoints
+            .NewApiVersionSet(endpointGroup.Name)
             .HasApiVersion(apiVersion)
             .ReportApiVersions()
             .Build();

@@ -62,7 +62,8 @@ public sealed class EndpointMapperTests
 
         var firstEndpoint = GetRouteEndpoint(app, "/api/v{version:apiVersion}/ordered/first");
         firstEndpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName.ShouldBe("FirstOrdered");
-        firstEndpoint.Metadata.GetMetadata<IEndpointSummaryMetadata>()?.Summary.ShouldBe("Gets the first ordered endpoint.");
+        firstEndpoint.Metadata.GetMetadata<IEndpointSummaryMetadata>()?
+            .Summary.ShouldBe("Gets the first ordered endpoint.");
     }
 
     [Fact(DisplayName = "MapGroupEndpoints maps endpoints without an HTTP module registry")]
