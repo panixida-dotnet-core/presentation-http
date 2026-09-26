@@ -36,6 +36,17 @@ internal sealed class HttpModuleApiVersionDescriptionProvider(
                 versions.Add(new ApiVersionDescription(ApiVersion.Neutral, module.Name));
             }
 
+            var documentNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var version in versions)
+            {
+                if (!documentNames.Add(version.GroupName))
+                {
+                    throw new InvalidOperationException(
+                        $"The OpenAPI document name '{version.GroupName}' is already registered. Configure unique HTTP module names.");
+                }
+            }
+
             return versions;
         }
     }

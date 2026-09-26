@@ -1,4 +1,5 @@
 using Asp.Versioning;
+using Asp.Versioning.ApiExplorer;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -325,6 +326,64 @@ public sealed class OpenApiConfigurationTests
         }
         using var response = await client.GetAsync("/connect/first", TestContext.Current.CancellationToken);
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Theory(DisplayName = "OpenAPI configuration rejects duplicate final document names ignoring case")]
+    [InlineData(true, "orders-v1")]
+    [InlineData(true, "ORDERS-V1")]
+    [InlineData(false, "v1")]
+    [InlineData(false, "V1")]
+    public async Task AddOpenApiConfiguration_ShouldRejectDuplicateDocumentNames(
+        bool useVersionedModule,
+        string commonDocumentName)
+    {
+        var commonModuleAssembly = typeof(OrderedEndpointGroup).Assembly;
+        var versionedModuleAssembly = typeof(OpenApiConfiguration).Assembly;
+        var configurationValues = CreateModuleConfigurationValues(
+            (commonModuleAssembly, commonDocumentName, "Common endpoints"));
+
+        if (useVersionedModule)
+        {
+            foreach (var value in CreateModuleConfigurationValues(
+                (versionedModuleAssembly, "orders", "Order endpoints")))
+            {
+                configurationValues.Add(value.Key, value.Value);
+            }
+        }
+
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseUrls("http://127.0.0.1:0");
+        builder.Configuration.AddInMemoryCollection(configurationValues);
+        builder.Services.AddHttp(
+            builder.Configuration,
+            useVersionedModule ? [commonModuleAssembly, versionedModuleAssembly] : [commonModuleAssembly]);
+        await using var app = builder.Build();
+        app.MapGet("/connect", static () => "connect")
+            .WithGroupName(commonDocumentName)
+            .WithMetadata(new HttpModule(
+                commonDocumentName,
+                "Common endpoints",
+                commonModuleAssembly));
+        var versions = app.NewApiVersionSet()
+            .HasApiVersion(new ApiVersion(1, 0))
+            .Build();
+        var endpoint = app.MapGroup(EndpointConstants.EndpointPrefix)
+            .MapGet("/orders", static () => "orders")
+            .WithApiVersionSet(versions)
+            .MapToApiVersion(new ApiVersion(1, 0));
+
+        if (useVersionedModule)
+        {
+            endpoint.WithGroupName("orders");
+        }
+
+        await app.StartAsync(TestContext.Current.CancellationToken);
+        var provider = app.Services.GetRequiredService<IApiVersionDescriptionProvider>();
+
+        var exception = Should.Throw<InvalidOperationException>(() => provider.ApiVersionDescriptions);
+
+        exception.Message.ShouldBe(
+            $"The OpenAPI document name '{commonDocumentName}' is already registered. Configure unique HTTP module names.");
     }
 
     [Fact(DisplayName = "OpenAPI configuration omits modules without endpoints")]
