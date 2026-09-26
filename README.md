@@ -27,7 +27,7 @@ It provides common Minimal API endpoint conventions, API versioning, OpenAPI set
 
 ## Requirements
 
-- .NET 10 SDK.
+- .NET 10 SDK 10.0.401 or later. The packaged generator uses Roslyn 5.9 and requires a compatible compiler in endpoint projects.
 - ASP.NET Core Minimal API application.
 
 ## Installation
@@ -208,14 +208,29 @@ Call the standard ASP.NET Core `MapGet`, `MapPost`, `MapPut`, `MapPatch`, `MapDe
 - Register validation explicitly in each endpoint assembly instead of relying on `AddHttp`. On .NET 10, use public request DTOs for automatic validation discovery; the smoke application checks that an invalid request returns `400`.
 - Review configured proxy/network values: malformed values now fail explicitly. The existing configuration keys, defaults and reload behavior are retained.
 - Core dependencies are Application `4.0.3`, ResultPattern `1.0.4`, and transitive Domain `3.0.1`.
+- API Versioning is `10.2.3`, ASP.NET Core OpenAPI is `10.0.12`, and Scalar is `2.17.10`. OpenAPI documents remain grouped by HTTP module, with all of that module's API versions included. The runtime project suppresses API Versioning diagnostics `AV0029` and `AV0030` for this intentional document layout; it does not enable the separate document-per-version integration or suppress trimming/AOT diagnostics.
 
 ## Native AOT
 
 The runtime project enables `IsAotCompatible`. Our endpoint discovery and construction use generated registrations; configuration binding uses the .NET Roslyn generator. The registry uses assembly identity and module initialization, as in the Core EF registry, without scanning types or invoking constructors through reflection.
 
-The standard `AddHttp` setup still calls `Asp.Versioning.Mvc.ApiExplorer` `10.0.1`, whose `AddApiExplorer()` registers MVC and is marked `RequiresUnreferencedCode`. Both public `AddHttp` overloads propagate that restriction. A warning-free library build is not a claim that this dependency path is AOT-compatible.
+The standard `AddHttp` setup still calls `Asp.Versioning.Mvc.ApiExplorer` `10.2.1`, brought in by `Asp.Versioning.OpenApi` `10.2.3`. Its `AddApiExplorer()` registers MVC and is marked `RequiresUnreferencedCode`. Both public `AddHttp` overloads propagate that restriction. A warning-free library build is not a claim that this dependency path is AOT-compatible.
 
-A separate consumer of the packaged library was published with `PublishTrimmed=true`: it reported `IL2026` at `AddHttp` and failed during startup in MVC `ApplicationPartManager`, which dynamically loads `Asp.Versioning.OpenApi`. Supporting the full setup requires replacing or isolating this MVC explorer integration and verifying API-version substitution in OpenAPI documents. The annotations expose the restriction; they do not fix it.
+One-time checks on September 26, 2026 used the packaged library, SDK `10.0.401`, ASP.NET Core `10.0.12`, Linux x64, `PublishAot=true`, Request Delegate Generator, and source-generated JSON metadata with reflection-based JSON disabled. The resulting native executables were run; successful publication alone was not treated as compatibility.
+
+| Consumer setup | Result |
+| --- | --- |
+| Unmodified `AddHttp` / `UseHttp`, ordinary Release execution | All 14 checks passed. |
+| Unmodified `AddHttp` / `UseHttp`, Native AOT | Startup failed in both Development and Production: MVC `ApplicationPartManager` attempted to dynamically load trimmed `Asp.Versioning.OpenApi` metadata. |
+| Native AOT with an explicit empty `ApplicationPartManager` registered before `AddHttp`, diagnostic setup only | All 12 API/configuration checks and the Scalar HTML endpoint passed. The module OpenAPI document returned HTTP 500 in `VersionedModelMetadataProvider`, because enhanced MVC model metadata is disabled under AOT. |
+| The same diagnostic setup with `VersionedModelMetadataProvider` removed | All 14 checks passed, including OpenAPI. This bypass disables version-aware model metadata and does not verify that feature. |
+| Independent consumer using API Versioning's `AddOpenApi()` and `WithDocumentPerVersion()`, without this library | All 7 ordinary Release checks passed. Native AOT failed during registration because `AddOpenApi()` calls unsupported `Assembly.GetCallingAssembly()`. |
+
+The API checks covered generated registration, singleton/keyed/optional constructor injection, two API versions, unsupported versions, DTO/array JSON, valid and invalid request validation, parameter binding, exception ProblemDetails, sorting, forwarded headers, and options reload. OpenAPI checks covered module grouping, substituted version paths, and DTO schemas. Serving Scalar HTML does not establish that its OpenAPI document works.
+
+The model metadata failure is also tracked in [API Versioning issue #1226](https://github.com/dotnet/aspnet-api-versioning/issues/1226), originally reported against .NET 11; this check reproduced it on .NET 10. Native compilation also reported MVC trimming/dynamic-code warnings, including `IL2026` and `IL3050`.
+
+Full compatibility requires an AOT-safe versioned explorer integration for Minimal APIs, preserving route substitution, API version metadata, module documents, and schema generation without MVC model discovery. Explicit application parts only bypass the first failure. Disabling versioned model metadata would remove version-aware member handling and is not a general replacement. API Versioning's separate OpenAPI integration additionally needs an explicit assembly/XML-document source instead of `Assembly.GetCallingAssembly()`. These are remaining dependency/integration changes, not fixes supplied by this version update.
 
 The consuming application must enable the Request Delegate Generator in every endpoint project, register a `JsonSerializerContext` for its request/response DTOs, and register validation in the appropriate assembly. Source generation does not remove all reflection inside ASP.NET Core, DI, API Versioning, Scalar, or their generators; those are dependency-owned paths.
 
@@ -225,7 +240,7 @@ The consuming application must enable the Request Delegate Generator in every en
 </PropertyGroup>
 ```
 
-A one-time Native AOT compatibility check on Linux passed for generated registration, constructor injection, configuration, versioned routes, JSON, validation, exception handling and module OpenAPI documents. It registered services individually to exclude the unsupported MVC ApiExplorer setup. This result does not certify the full `AddHttp` path or every application-specific DTO/handler.
+Compatibility probes are temporary and are not included as a test project or CI job. The checks do not certify every application-specific DTO, handler, or dependency feature.
 
 Native compilation requires the platform toolchain, including Visual Studio C++ build tools on Windows. See the [ASP.NET Core Native AOT documentation](https://learn.microsoft.com/aspnet/core/fundamentals/native-aot?view=aspnetcore-10.0).
 
