@@ -32,11 +32,11 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers the default HTTP presentation services and separate OpenAPI documents for the specified modules.
+    /// Registers the default HTTP presentation services and separate OpenAPI documents for each module and API version.
     /// </summary>
     /// <param name="services">The application service collection.</param>
     /// <param name="configuration">The application configuration. Module document names and titles are read from the <c>HttpModules</c> section by presentation assembly name.</param>
-    /// <param name="moduleAssemblies">The presentation assemblies to map and expose as separate OpenAPI documents.</param>
+    /// <param name="moduleAssemblies">The presentation assemblies to map and document per API version. Modules with only unversioned endpoints use a common document.</param>
     /// <returns>The original service collection for further configuration.</returns>
     [RequiresUnreferencedCode(ApiVersioningConfiguration.TrimmingMessage)]
     public static IServiceCollection AddHttp(

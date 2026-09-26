@@ -3,7 +3,6 @@
         <IsPackable>true</IsPackable>
         <IsAotCompatible>true</IsAotCompatible>
         <EnableConfigurationBindingGenerator>true</EnableConfigurationBindingGenerator>
-        <NoWarn>$(NoWarn);AV0029;AV0030</NoWarn>
 
         <AssemblyName>PANiXiDA.Core.Presentation.Http</AssemblyName>
 

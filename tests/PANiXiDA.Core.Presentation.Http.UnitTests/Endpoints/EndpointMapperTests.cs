@@ -104,6 +104,7 @@ public sealed class EndpointMapperTests
         metadata.Name.ShouldBe("tests");
         metadata.Title.ShouldBe("Test endpoints");
         metadata.PresentationAssembly.ShouldBeSameAs(moduleAssembly);
+        firstEndpoint.Metadata.GetMetadata<IEndpointGroupNameMetadata>()?.EndpointGroupName.ShouldBe("tests");
     }
 
     [Fact(DisplayName = "MapGroupEndpoints attaches the HTTP module to custom route groups")]

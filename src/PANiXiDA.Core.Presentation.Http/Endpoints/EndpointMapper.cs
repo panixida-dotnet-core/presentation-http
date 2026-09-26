@@ -63,6 +63,7 @@ public static class EndpointMapper
             moduleRegistry.TryGetModule(typeof(TGroup).Assembly, out var module))
         {
             group.WithMetadata(module);
+            group.WithGroupName(module.Name);
         }
 
         var endpoints = EndpointRegistry.CreateEndpoints<TGroup>(serviceProvider);

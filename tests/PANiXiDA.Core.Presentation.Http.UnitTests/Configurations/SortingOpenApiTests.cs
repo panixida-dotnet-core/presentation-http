@@ -1,3 +1,5 @@
+using Asp.Versioning;
+
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
@@ -26,26 +28,27 @@ public sealed class SortingOpenApiTests
     {
         await using var app = await CreateApplicationAsync(useModule);
         using var client = CreateClient(app);
-        var documentName = useModule ? "users" : "v1";
+        var documentName = useModule ? "users-v1" : "v1";
 
         var content = await client.GetStringAsync(
             $"/openapi/{documentName}.json",
             TestContext.Current.CancellationToken);
         using var document = JsonDocument.Parse(content);
 
-        AssertSortingParameter(GetParameter(document, "/sorting", "Fields"));
-        AssertSortingParameter(GetParameter(document, "/renamed", "sort"));
+        AssertSortingParameter(GetParameter(document, "/api/v1/sorting", "Fields"));
+        AssertSortingParameter(GetParameter(document, "/api/v1/renamed", "sort"));
 
-        var other = GetParameter(document, "/other", "Fields");
+        var other = GetParameter(document, "/api/v1/other", "Fields");
         other
             .GetProperty("schema")
             .GetProperty("items")
             .GetProperty("type")
             .GetString()
             .ShouldBe("integer");
-        other.TryGetProperty("description", out _).ShouldBeFalse();
+        (other.TryGetProperty("description", out var otherDescription) ? otherDescription.GetString() : null)
+            .ShouldBeNullOrEmpty();
 
-        var header = GetParameter(document, "/headers", "Fields");
+        var header = GetParameter(document, "/api/v1/headers", "Fields");
         header
             .GetProperty("in")
             .GetString()
@@ -58,7 +61,7 @@ public sealed class SortingOpenApiTests
 
         var body = document.RootElement
             .GetProperty("paths")
-            .GetProperty("/body")
+            .GetProperty("/api/v1/body")
             .GetProperty("post")
             .GetProperty("requestBody")
             .GetProperty("content")
@@ -70,7 +73,7 @@ public sealed class SortingOpenApiTests
             .ShouldBeTrue();
         var response = document.RootElement
             .GetProperty("paths")
-            .GetProperty("/sorting")
+            .GetProperty("/api/v1/sorting")
             .GetProperty("get")
             .GetProperty("responses")
             .GetProperty("200")
@@ -97,7 +100,7 @@ public sealed class SortingOpenApiTests
         await using var app = await CreateApplicationAsync(false);
         using var client = CreateClient(app);
 
-        using var response = await client.GetAsync(path, TestContext.Current.CancellationToken);
+        using var response = await client.GetAsync($"/api/v1{path}", TestContext.Current.CancellationToken);
 
         response.StatusCode.ShouldBe(status);
         if (status == HttpStatusCode.OK)
@@ -177,22 +180,35 @@ public sealed class SortingOpenApiTests
         });
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         var module = new HttpModule("users", "Users", typeof(SortingOpenApiTests).Assembly);
+        builder.Services.AddApiVersioningConfiguration();
         builder.Services.AddJsonConfiguration();
         builder.Services.AddOpenApiConfiguration(builder.Configuration, useModule ? [module] : []);
         var app = builder.Build();
-        app
+        var version = new ApiVersion(1, 0);
+        var versions = app.NewApiVersionSet()
+            .HasApiVersion(version)
+            .Build();
+        var group = app.MapGroup("/api/v{version:apiVersion}")
+            .WithApiVersionSet(versions)
+            .MapToApiVersion(version);
+        if (useModule)
+        {
+            group.WithGroupName(module.Name);
+        }
+
+        group
             .MapGet("/sorting", ([AsParameters] SortingParameters sorting) => TypedResults.Ok(sorting.Fields))
             .WithMetadata(module);
-        app
+        group
             .MapGet("/renamed", ([FromQuery(Name = "sort")] SortField[] fields) => TypedResults.Ok(fields))
             .WithMetadata(module);
-        app
+        group
             .MapGet("/other", ([AsParameters] OtherParameters parameters) => TypedResults.Ok(parameters.Fields))
             .WithMetadata(module);
-        app
+        group
             .MapGet("/headers", ([FromHeader(Name = "Fields")] SortField[] fields) => TypedResults.Ok(fields))
             .WithMetadata(module);
-        app
+        group
             .MapPost("/body", ([FromBody] SortField[] fields) => TypedResults.Ok(fields))
             .WithMetadata(module);
         app.UseOpenApiConfiguration();

@@ -17,7 +17,7 @@ It provides common Minimal API endpoint conventions, API versioning, OpenAPI set
 - `AddHttp` registers the default HTTP presentation services.
 - `UseHttp` adds the default middleware pipeline and maps source-generated endpoint registrations.
 - JSON numeric values use strict number handling.
-- Module assemblies can be mapped to separate OpenAPI documents and Scalar sources through the `HttpModules` configuration section.
+- Module assemblies can be mapped to separate OpenAPI documents and Scalar sources for each API version through the `HttpModules` configuration section.
 - Health checks are registered by `AddHttp` and exposed at `/health` by `UseHttp`.
 - `IEndpointGroup` defines route, resource name, and API version metadata for Minimal API endpoint groups.
 - `IEndpoint<TGroup>` defines route, name, and summary metadata for endpoints that belong to a specific group.
@@ -148,7 +148,7 @@ public sealed class OrdersEndpointGroup : IEndpointGroup
 The final route prefix is `/api/v{version}/orders`.
 
 Groups that require a custom root route can map their endpoints through an explicit `RouteGroupBuilder`.
-The registered HTTP module metadata is attached to custom groups as well, so their endpoints remain available in the corresponding module OpenAPI document.
+The registered HTTP module metadata is attached to custom groups as well. Routes without a version appear in every document of their module. A module containing only unversioned routes has one common document, such as `/openapi/identity.json`.
 
 ```csharp
 public void Map(IEndpointRouteBuilder endpoints)
@@ -210,35 +210,30 @@ The endpoint name and summary are applied automatically through an isolated rout
 - `AddHttp` retains the standard validation infrastructure. Additionally call `AddValidation()` in each endpoint/DTO assembly to generate that assembly's model validation metadata. On .NET 10, use public request DTOs for automatic validation discovery; the smoke application checks that an invalid request returns `400`.
 - Review configured proxy/network values: malformed values now fail explicitly. The existing configuration keys, defaults and reload behavior are retained.
 - Core dependencies are Application `4.0.3`, ResultPattern `1.0.4`, and transitive Domain `3.0.1`.
-- API Versioning is `10.2.3`, ASP.NET Core OpenAPI is `10.0.12`, and Scalar is `2.17.10`. OpenAPI documents remain grouped by HTTP module, with all of that module's API versions included. The runtime project suppresses API Versioning diagnostics `AV0029` and `AV0030` for this intentional document layout; it does not enable the separate document-per-version integration or suppress trimming/AOT diagnostics.
+- API Versioning is `10.2.3`, ASP.NET Core OpenAPI is `10.0.12`, and Scalar is `2.17.10`.
+- OpenAPI documents are now separated by module and API version: replace links such as `/openapi/orders.json` with `/openapi/orders-v1.json` or `/openapi/orders-v2.json`. Without modules, use `/openapi/v1.json`, `/openapi/v2.json`, and so on. Configured module names and titles stay unchanged. A module containing only unversioned routes retains its common `/openapi/{module}.json` document.
 
-`AV0029` recommends replacing standard OpenAPI registration with API Versioning's OpenAPI integration; its analyzer also triggers on our versioned ApiExplorer registration. `AV0030` requires `WithDocumentPerVersion()`, while our documents intentionally contain every version of one module. Removing the suppression produces build errors, including `AV0029` in Microsoft's generated XML-comment integration. The upstream documentation permits suppression of [AV0029](https://dotnet.github.io/aspnet-api-versioning/diagnostic/av0029.html) and, for documents containing all versions, [AV0030](https://dotnet.github.io/aspnet-api-versioning/diagnostic/av0030.html).
+OpenAPI uses API Versioning's `AddOpenApi()` integration and `WithDocumentPerVersion()`. Diagnostics `AV0029` and `AV0030` are no longer suppressed. The module description provider extends the upstream version descriptions with common documents for unversioned modules; it reads endpoint metadata without runtime type scanning.
 
 ## Native AOT
 
 The runtime project enables `IsAotCompatible`. Our endpoint discovery and construction use generated registrations; configuration binding uses the .NET Roslyn generator. The registry uses assembly identity and module initialization, as in the Core EF registry, without scanning types or invoking constructors through reflection.
 
-The standard `AddHttp` setup still calls `Asp.Versioning.Mvc.ApiExplorer` `10.2.1`, brought in by `Asp.Versioning.OpenApi` `10.2.3`. Its `AddApiExplorer()` registers MVC and is marked `RequiresUnreferencedCode`. Both public `AddHttp` overloads propagate that restriction. A warning-free library build is not a claim that this dependency path is AOT-compatible.
+The standard `AddHttp` setup calls `Asp.Versioning.OpenApi` `10.2.3` and its transitive `Asp.Versioning.Mvc.ApiExplorer` `10.2.1`. The OpenAPI integration uses runtime assembly discovery, and `AddApiExplorer()` registers MVC. Both public `AddHttp` overloads propagate the trimming restriction with `RequiresUnreferencedCode`. A warning-free library build is not a claim that this dependency path is AOT-compatible.
 
 One-time checks on September 26, 2026 used the packaged library, SDK `10.0.401`, ASP.NET Core `10.0.12`, Linux x64, `PublishAot=true`, Request Delegate Generator, and source-generated JSON metadata with reflection-based JSON disabled. The resulting native executables were run; successful publication alone was not treated as compatibility.
 
 | Consumer setup | Result |
 | --- | --- |
-| Unmodified `AddHttp` / `UseHttp`, ordinary Release execution | All 14 checks passed. |
-| Unmodified `AddHttp` / `UseHttp`, Native AOT | Startup failed in both Development and Production: MVC `ApplicationPartManager` attempted to dynamically load trimmed `Asp.Versioning.OpenApi` metadata. |
-| Native AOT with an explicit empty `ApplicationPartManager` registered before `AddHttp`, diagnostic setup only | All 12 API/configuration checks and the Scalar HTML endpoint passed. The module OpenAPI document returned HTTP 500 in `VersionedModelMetadataProvider`, because enhanced MVC model metadata is disabled under AOT. |
-| The same diagnostic setup with `VersionedModelMetadataProvider` removed | All 14 checks passed, including OpenAPI. This bypass disables version-aware model metadata and does not verify that feature. |
-| Independent consumer using API Versioning's `AddOpenApi()` and `WithDocumentPerVersion()`, without this library | All 7 ordinary Release checks passed. Native AOT failed during registration because `AddOpenApi()` calls unsupported `Assembly.GetCallingAssembly()`. |
+| Unmodified `AddHttp` / `UseHttp`, ordinary Release execution | All 19 checks passed, including separate module/version documents and an unversioned route shared by both versions. |
+| Unmodified `AddHttp` / `UseHttp`, Native AOT | Registration failed: API Versioning's `AddOpenApi()` calls unsupported `Assembly.GetCallingAssembly()`. |
+| Native AOT with an explicit empty `ApplicationPartManager`, diagnostic setup only | The same `Assembly.GetCallingAssembly()` failure; changing MVC application parts does not bypass it. |
 
 The API checks covered generated registration, singleton/keyed/optional constructor injection, two API versions, unsupported versions, DTO/array JSON, valid and invalid request validation, parameter binding, exception ProblemDetails, sorting, forwarded headers, and options reload. OpenAPI checks covered module grouping, substituted version paths, and DTO schemas. Serving Scalar HTML does not establish that its OpenAPI document works.
 
-The short `builder.MapGet(builder.Route, Handle)` API was also checked in a packaged consumer: all 15 checks passed under ordinary Release execution and Native AOT with the same diagnostic MVC bypasses. This included instance/static method groups, handler DI, endpoint filters, automatic name/summary metadata, and isolation from sibling routes. The short mapping API does not remove the external MVC blockers described above.
+Earlier diagnostic checks, before enabling the official OpenAPI integration, also identified MVC `ApplicationPartManager` dynamic assembly loading and `VersionedModelMetadataProvider` failures under AOT. The latter is tracked in [API Versioning issue #1226](https://github.com/dotnet/aspnet-api-versioning/issues/1226) and was reproduced on .NET 10. Removing those MVC components allowed the generated endpoint/configuration paths to pass 17 checks, but removed version-aware model metadata support. That result does not establish compatibility of the current full setup. Native compilation still reports MVC trimming/dynamic-code warnings, including `IL2026` and `IL3050`.
 
-After restoring validation registration in `AddHttp`, the expanded consumer passed 17 checks under ordinary Release execution and Native AOT with the same diagnostic MVC bypasses. Invalid handler parameters returned `400` with `AddHttp` alone. Invalid DTO properties returned `400` only when `AddValidation()` also ran in the consumer assembly; without that call they returned `200`, confirming the missing model metadata rather than an AOT failure.
-
-The model metadata failure is also tracked in [API Versioning issue #1226](https://github.com/dotnet/aspnet-api-versioning/issues/1226), originally reported against .NET 11; this check reproduced it on .NET 10. Native compilation also reported MVC trimming/dynamic-code warnings, including `IL2026` and `IL3050`.
-
-Full compatibility requires an AOT-safe versioned explorer integration for Minimal APIs, preserving route substitution, API version metadata, module documents, and schema generation without MVC model discovery. Explicit application parts only bypass the first failure. Disabling versioned model metadata would remove version-aware member handling and is not a general replacement. API Versioning's separate OpenAPI integration additionally needs an explicit assembly/XML-document source instead of `Assembly.GetCallingAssembly()`. These are remaining dependency/integration changes, not fixes supplied by this version update.
+Full compatibility requires an explicit assembly/XML-document source instead of `Assembly.GetCallingAssembly()` and an AOT-safe versioned explorer for Minimal APIs, preserving route substitution, version-aware model metadata, module/version documents, and schema generation without MVC model discovery. Disabling model metadata is not a functionality-preserving fix. These are remaining dependency/integration changes, not fixes supplied by this version update.
 
 The consuming application must enable the Request Delegate Generator in every endpoint project, register a `JsonSerializerContext` for its request/response DTOs, and register validation in the appropriate assembly. Source generation does not remove all reflection inside ASP.NET Core, DI, API Versioning, Scalar, or their generators; those are dependency-owned paths.
 
@@ -317,7 +312,7 @@ String properties and enums configured for string serialization are unaffected.
 
 In `Development`, `UseHttp` exposes:
 
-- OpenAPI document at `/openapi/v1.json`;
+- OpenAPI documents at `/openapi/v1.json`, `/openapi/v2.json`, and so on for the mapped API versions;
 - Scalar API reference at `/scalar`.
 
 OpenAPI registration also enables Scalar transformers for Scalar-specific document extensions.
@@ -345,7 +340,7 @@ client generators expose `Fields` as a string collection. JSON request and respo
 
 ### Module documents
 
-Applications composed from multiple presentation modules can expose one OpenAPI document per module.
+Applications composed from multiple presentation modules expose one OpenAPI document per module and API version.
 Register the presentation assemblies in code and configure their document names and display titles in `appsettings.json`.
 `UseHttp` automatically maps endpoint groups from registered module assemblies.
 
@@ -384,15 +379,16 @@ Both `Name` and `Title` are required for every registered module assembly.
 }
 ```
 
-This configuration exposes:
+For Identity endpoints in versions 1 and 2 and Compendium endpoints in version 1, this configuration exposes:
 
-- `/openapi/identity.json` for Identity endpoints;
-- `/openapi/compendium.json` for Compendium endpoints;
-- `/scalar` with a document selector for both modules.
+- `/openapi/identity-v1.json` with the title `Identity API v1`;
+- `/openapi/identity-v2.json` with the title `Identity API v2`;
+- `/openapi/compendium-v1.json` with the title `Compendium API v1`;
+- `/scalar` with a selector for these three documents.
 
-OpenAPI documents are filtered by module metadata while API version metadata remains independent.
+Each document includes only that module's endpoints for the selected version, plus its routes without a version, such as `/connect`. A module with only unversioned routes gets one common document, such as `/openapi/identity.json`, titled `Identity API`. Empty modules produce no documents. API route URLs and the endpoint mapping API are unchanged by document grouping.
 Document names are compared case-insensitively, and a presentation assembly can belong to only one module.
-When no modules are registered, the existing combined `/openapi/v1.json` document remains the default.
+Version names include minor versions and status suffixes when present, for example `identity-v1.1` or `identity-v2-beta`. When no modules are registered, documents are separated by version (`v1`, `v2`, and so on). An application with only unversioned endpoints and no modules uses `v1`.
 
 The Scalar browser tab title can be configured from application configuration.
 If the title is not configured or is blank, Scalar uses its default document title.

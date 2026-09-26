@@ -8,7 +8,8 @@ namespace PANiXiDA.Core.Presentation.Http.Configurations;
 
 internal static class ApiVersioningConfiguration
 {
-    internal const string TrimmingMessage = "Asp.Versioning.Mvc.ApiExplorer registers MVC services that do not support trimming or Native AOT.";
+    internal const string TrimmingMessage = "API Versioning's MVC explorer and OpenAPI integration do not support trimming or Native AOT.";
+    internal const string GroupNameFormat = "'v'VVV";
 
     [RequiresUnreferencedCode(TrimmingMessage)]
     internal static IServiceCollection AddApiVersioningConfiguration(this IServiceCollection services)
@@ -22,7 +23,8 @@ internal static class ApiVersioningConfiguration
         })
         .AddApiExplorer(options =>
         {
-            options.GroupNameFormat = "'v'V";
+            options.GroupNameFormat = GroupNameFormat;
+            options.FormatGroupName = static (groupName, version) => $"{groupName}-{version}";
             options.SubstituteApiVersionInUrl = true;
         });
 
