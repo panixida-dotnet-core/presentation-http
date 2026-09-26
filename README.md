@@ -21,16 +21,20 @@ It provides common Minimal API endpoint conventions, API versioning, OpenAPI set
 - Health checks are registered by `AddHttp` and exposed at `/health` by `UseHttp`.
 - `IEndpointGroup` defines route, resource name, and API version metadata for Minimal API endpoint groups.
 - `IEndpoint<TGroup>` defines route, name, and summary metadata for endpoints that belong to a specific group.
-- The bundled Roslyn generator discovers endpoint types at compile time and emits constructor factories in deterministic type-name order.
+- The bundled source generator registers endpoints in deterministic type-name order.
 - `EndpointConstants.EndpointPrefix` defines `/api/v{version:apiVersion}`.
 - `ResultHttpMapper` maps `Result` and `Result<T>` to `IResult`.
 
 ## Requirements
 
-- .NET 10 SDK 10.0.401 or later. The packaged generator uses Roslyn 5.9 and requires a compatible compiler in endpoint projects.
+- .NET 10 SDK 10.0.401 or later.
 - ASP.NET Core Minimal API application.
 
+Full Native AOT support is currently blocked by API Versioning's OpenAPI/MVC integration.
+
 ## Installation
+
+Reference the package in each endpoint project with its analyzer assets enabled.
 
 ```xml
 <ItemGroup>
@@ -55,9 +59,7 @@ app.UseHttp(typeof(Program).Assembly);
 app.Run();
 ```
 
-Reference the package directly in each project that declares endpoints, and keep its `analyzers` assets enabled.
-`AddHttp` retains the MVC-based API Versioning explorer and is not supported in a trimmed or Native AOT application; see [Native AOT](#native-aot) for the supported boundary.
-`AddHttp` registers the standard validation infrastructure, including validation attributes on handler parameters. Also call `AddValidation()` in each assembly containing endpoint DTOs, so ASP.NET Core can generate and register metadata for their properties. A call inside this package cannot generate metadata for a consuming assembly. This is a source-generator discovery requirement, not an AOT incompatibility of `AddValidation`; see [validation across assemblies](https://learn.microsoft.com/aspnet/core/fundamentals/validation?view=aspnetcore-10.0#register-validation-across-assemblies).
+Call `AddValidation()` in each endpoint/DTO assembly to generate validation metadata for its DTO properties. `AddHttp` registers the shared validation services.
 
 ## Forwarded Headers
 
@@ -71,7 +73,7 @@ ForwardedHeaders.XForwardedProto
 
 The package also clears the default loopback-only `KnownIPNetworks` and `KnownProxies` restrictions so applications behind Kubernetes ingress or Gateway API proxies can process forwarded headers without per-service proxy registration.
 
-Forwarded header names, original header names, `ForwardedHeaders`, `ForwardLimit`, `RequireHeaderSymmetry`, `AllowedHosts`, `KnownProxies`, and network lists can be supplied through a `ForwardedHeaders` section. Configuration values are applied directly to the standard `ForwardedHeadersOptions`, without an intermediate settings model. Scalar and string-array reads use generated binding; IP addresses and networks use explicit parsing, without reflection-based configuration binding.
+Configure the standard `ForwardedHeadersOptions` values through the `ForwardedHeaders` section.
 
 ```json
 {
@@ -86,7 +88,7 @@ Forwarded header names, original header names, `ForwardedHeaders`, `ForwardLimit
 }
 ```
 
-`KnownProxies` contains IP address strings. `KnownIPNetworks` contains objects such as `{ "Prefix": "10.0.0.0", "PrefixLength": 8 }`; the legacy `KnownNetworks` key accepts the same shape. Invalid addresses or network prefixes fail when options are resolved instead of being silently ignored. Options reload notifications are preserved.
+`KnownIPNetworks` and the legacy `KnownNetworks` key accept objects such as `{ "Prefix": "10.0.0.0", "PrefixLength": 8 }`. Invalid addresses and networks are rejected; configuration reload is supported.
 
 For stricter trust boundaries, configure `ForwardedHeadersOptions` directly after `AddHttp`.
 
@@ -148,7 +150,7 @@ public sealed class OrdersEndpointGroup : IEndpointGroup
 The final route prefix is `/api/v{version}/orders`.
 
 Groups that require a custom root route can map their endpoints through an explicit `RouteGroupBuilder`.
-The registered HTTP module metadata is attached to custom groups as well. Routes without a version appear in every document of their module. A module containing only unversioned routes has one common document, such as `/openapi/identity.json`.
+Custom groups retain their HTTP module metadata for OpenAPI documents.
 
 ```csharp
 public void Map(IEndpointRouteBuilder endpoints)
@@ -167,9 +169,7 @@ public void Map(IEndpointRouteBuilder endpoints)
 An endpoint implements `IEndpoint<TGroup>`, where `TGroup` is the endpoint group it belongs to.
 Endpoint metadata is declared as public properties so it can be required by the interface and applied by `EndpointMapper`.
 
-Groups and their endpoints must be in the same assembly. Concrete implementations must be accessible from generated code (public or internal, including accessible nested types), non-generic, and have one public constructor. For multiple public constructors, mark exactly one with `[ActivatorUtilitiesConstructor]`. Constructor dependencies are resolved from DI, including explicit `[FromKeyedServices(key)]` keys and optional parameter defaults. Missing required services still fail when endpoints are mapped. Constructor selection no longer depends on which services happen to be registered at runtime.
-
-Abstract types and interfaces are ignored. Private, protected, file-local and open generic implementations, unsupported constructors, and endpoints targeting a group in another assembly produce `PANHTTPSG001`–`PANHTTPSG004` compiler errors. No runtime scanning or activation fallback is used if the analyzer is missing.
+Keep each group and its endpoints in the same assembly. Use non-generic `public` or `internal` classes with one public constructor; for multiple constructors, mark one with `[ActivatorUtilitiesConstructor]`. Dependencies are resolved from DI, including keyed services and optional parameters.
 
 ```csharp
 using Microsoft.AspNetCore.Builder;
@@ -197,55 +197,7 @@ public sealed class GetOrderEndpoint : IEndpoint<OrdersEndpointGroup>
 public sealed record OrderResponse(Guid Id);
 ```
 
-`EndpointMapBuilder` implements `IEndpointRouteBuilder`, so these are the standard ASP.NET Core `MapGet`, `MapPost`, `MapPut`, `MapPatch`, `MapDelete`, and `MapMethods` extensions. Pass `builder.Route` and the concrete handler to keep it visible to ASP.NET Core's Request Delegate Generator. For a method group, use `builder.MapGet(builder.Route, Handle)`; for multiple HTTP methods, use `builder.MapMethods(builder.Route, ["HEAD", "OPTIONS"], Handle)`.
-
-The endpoint name and summary are applied automatically through an isolated route group without changing the URL or sibling endpoints. Standard ASP.NET Core metadata precedence applies: handler attributes and endpoint conventions can override these defaults. Calls such as `.RequireAuthorization()`, `.WithName()`, `.WithSummary()`, and `.AddEndpointFilter()` remain available. `Group` still exposes the original group; `ApplyMetadata` remains available for routes mapped directly on it.
-
-## Migrating from 2.x
-
-- Rebuild every endpoint assembly with the included analyzer. Runtime assembly scanning and `ActivatorUtilities` endpoint activation have been removed.
-- Replace `builder.MapGet(handler)` with `builder.MapGet(builder.Route, handler)`, and likewise for other HTTP methods. `MapMethods` now takes `builder.Route` before the HTTP methods and handler. No separate metadata call is needed.
-- Endpoint names and summaries are now route group defaults. Handler-level `EndpointName` and `EndpointSummary` attributes can override them; in 2.x the wrapper applied the endpoint properties after handler attributes. Explicit fluent overrides remain supported.
-- Resolve ambiguous constructors explicitly with `[ActivatorUtilitiesConstructor]`. Private and open generic endpoint implementations now fail at compilation.
-- `AddHttp` retains the standard validation infrastructure. Additionally call `AddValidation()` in each endpoint/DTO assembly to generate that assembly's model validation metadata. On .NET 10, use public request DTOs for automatic validation discovery; the smoke application checks that an invalid request returns `400`.
-- Review configured proxy/network values: malformed values now fail explicitly. The existing configuration keys, defaults and reload behavior are retained.
-- Core dependencies are Application `4.0.3`, ResultPattern `1.0.4`, and transitive Domain `3.0.1`.
-- API Versioning is `10.2.3`, ASP.NET Core OpenAPI is `10.0.12`, and Scalar is `2.17.10`.
-- OpenAPI documents are now separated by module and API version: replace links such as `/openapi/orders.json` with `/openapi/orders-v1.json` or `/openapi/orders-v2.json`. Without modules, use `/openapi/v1.json`, `/openapi/v2.json`, and so on. Configured module names and titles stay unchanged. A module containing only unversioned routes retains its common `/openapi/{module}.json` document.
-
-OpenAPI uses API Versioning's `AddOpenApi()` integration and `WithDocumentPerVersion()`. Diagnostics `AV0029` and `AV0030` are no longer suppressed. The module description provider extends the upstream version descriptions with common documents for unversioned modules; it reads endpoint metadata without runtime type scanning.
-
-## Native AOT
-
-The runtime project enables `IsAotCompatible`. Our endpoint discovery and construction use generated registrations; configuration binding uses the .NET Roslyn generator. The registry uses assembly identity and module initialization, as in the Core EF registry, without scanning types or invoking constructors through reflection.
-
-The standard `AddHttp` setup calls `Asp.Versioning.OpenApi` `10.2.3` and its transitive `Asp.Versioning.Mvc.ApiExplorer` `10.2.1`. The OpenAPI integration uses runtime assembly discovery, and `AddApiExplorer()` registers MVC. Both public `AddHttp` overloads propagate the trimming restriction with `RequiresUnreferencedCode`. A warning-free library build is not a claim that this dependency path is AOT-compatible.
-
-One-time checks on September 26, 2026 used the packaged library, SDK `10.0.401`, ASP.NET Core `10.0.12`, Linux x64, `PublishAot=true`, Request Delegate Generator, and source-generated JSON metadata with reflection-based JSON disabled. The resulting native executables were run; successful publication alone was not treated as compatibility.
-
-| Consumer setup | Result |
-| --- | --- |
-| Unmodified `AddHttp` / `UseHttp`, ordinary Release execution | All 19 checks passed, including separate module/version documents and an unversioned route shared by both versions. |
-| Unmodified `AddHttp` / `UseHttp`, Native AOT | Registration failed: API Versioning's `AddOpenApi()` calls unsupported `Assembly.GetCallingAssembly()`. |
-| Native AOT with an explicit empty `ApplicationPartManager`, diagnostic setup only | The same `Assembly.GetCallingAssembly()` failure; changing MVC application parts does not bypass it. |
-
-The API checks covered generated registration, singleton/keyed/optional constructor injection, two API versions, unsupported versions, DTO/array JSON, valid and invalid request validation, parameter binding, exception ProblemDetails, sorting, forwarded headers, and options reload. OpenAPI checks covered module grouping, substituted version paths, and DTO schemas. Serving Scalar HTML does not establish that its OpenAPI document works.
-
-Earlier diagnostic checks, before enabling the official OpenAPI integration, also identified MVC `ApplicationPartManager` dynamic assembly loading and `VersionedModelMetadataProvider` failures under AOT. The latter is tracked in [API Versioning issue #1226](https://github.com/dotnet/aspnet-api-versioning/issues/1226) and was reproduced on .NET 10. Removing those MVC components allowed the generated endpoint/configuration paths to pass 17 checks, but removed version-aware model metadata support. That result does not establish compatibility of the current full setup. Native compilation still reports MVC trimming/dynamic-code warnings, including `IL2026` and `IL3050`.
-
-Full compatibility requires an explicit assembly/XML-document source instead of `Assembly.GetCallingAssembly()` and an AOT-safe versioned explorer for Minimal APIs, preserving route substitution, version-aware model metadata, module/version documents, and schema generation without MVC model discovery. Disabling model metadata is not a functionality-preserving fix. These are remaining dependency/integration changes, not fixes supplied by this version update.
-
-The consuming application must enable the Request Delegate Generator in every endpoint project, register a `JsonSerializerContext` for its request/response DTOs, and register validation in the appropriate assembly. Source generation does not remove all reflection inside ASP.NET Core, DI, API Versioning, Scalar, or their generators; those are dependency-owned paths.
-
-```xml
-<PropertyGroup>
-  <EnableRequestDelegateGenerator>true</EnableRequestDelegateGenerator>
-</PropertyGroup>
-```
-
-Compatibility probes are temporary and are not included as a test project or CI job. The checks do not certify every application-specific DTO, handler, or dependency feature.
-
-Native compilation requires the platform toolchain, including Visual Studio C++ build tools on Windows. See the [ASP.NET Core Native AOT documentation](https://learn.microsoft.com/aspnet/core/fundamentals/native-aot?view=aspnetcore-10.0).
+Use standard ASP.NET Core mapping methods, for example `builder.MapGet(builder.Route, Handle)` or `builder.MapMethods(builder.Route, ["HEAD", "OPTIONS"], Handle)`. Name and summary are applied automatically; standard endpoint conventions can override them.
 
 ## Result Mapping
 
@@ -386,9 +338,9 @@ For Identity endpoints in versions 1 and 2 and Compendium endpoints in version 1
 - `/openapi/compendium-v1.json` with the title `Compendium API v1`;
 - `/scalar` with a selector for these three documents.
 
-Each document includes only that module's endpoints for the selected version, plus its routes without a version, such as `/connect`. A module with only unversioned routes gets one common document, such as `/openapi/identity.json`, titled `Identity API`. Empty modules produce no documents. API route URLs and the endpoint mapping API are unchanged by document grouping.
+Routes without a version appear in every document of their module. A module with only unversioned routes uses a common document, such as `/openapi/identity.json`. Empty modules produce no documents.
 Document names are compared case-insensitively, and a presentation assembly can belong to only one module.
-Version names include minor versions and status suffixes when present, for example `identity-v1.1` or `identity-v2-beta`. When no modules are registered, documents are separated by version (`v1`, `v2`, and so on). An application with only unversioned endpoints and no modules uses `v1`.
+Without modules, documents are named by version (`v1`, `v2`, and so on); an application with only unversioned endpoints uses `v1`.
 
 The Scalar browser tab title can be configured from application configuration.
 If the title is not configured or is blank, Scalar uses its default document title.
@@ -418,9 +370,6 @@ The default API version is `1.0`, and the version must be present in the route.
 ```text
 src/
   PANiXiDA.Core.Presentation.Http.Generators/
-    Endpoints/
-      ConstructorFactoryBuilder.cs
-      EndpointRegistrationGenerator.cs
   PANiXiDA.Core.Presentation.Http/
     Configurations/
     DependencyInjection/
@@ -454,7 +403,8 @@ The source files under `src/PANiXiDA.Core.Presentation.Http` are covered by unit
 ### Continuous integration
 
 Every pull request and push to `main` runs formatting, tests, and mandatory
-SonarQube analysis. Publishing from `main` requires all checks, including the SonarQube Quality Gate.
+SonarQube analysis. Publishing from `main` starts only after the SonarQube
+Quality Gate succeeds.
 
 ## Package Contents
 
