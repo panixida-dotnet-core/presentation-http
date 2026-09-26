@@ -88,7 +88,7 @@ Configure the standard `ForwardedHeadersOptions` values through the `ForwardedHe
 }
 ```
 
-`KnownIPNetworks` and the legacy `KnownNetworks` key accept objects such as `{ "Prefix": "10.0.0.0", "PrefixLength": 8 }`. Both fields are required; an explicit `PrefixLength: 0` is allowed. Invalid addresses and networks are rejected; configuration reload is supported.
+`KnownIPNetworks` and the legacy `KnownNetworks` key accept objects such as `{ "Prefix": "10.0.0.0", "PrefixLength": 8 }`. Both fields are required; an explicit `PrefixLength: 0` is allowed. Invalid addresses and networks are rejected. Restart the application to apply forwarded-header configuration changes.
 
 For stricter trust boundaries, configure `ForwardedHeadersOptions` directly after `AddHttp`.
 
