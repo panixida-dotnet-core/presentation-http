@@ -16,6 +16,6 @@ public sealed class NonGenericEndpoint : IEndpoint
     {
         EndpointMappingRecorder.Add(nameof(NonGenericEndpoint));
 
-        builder.ApplyMetadata(builder.Group.MapGet(builder.Route, static () => "non-generic"));
+        builder.MapGet(builder.Route, static () => "non-generic");
     }
 }

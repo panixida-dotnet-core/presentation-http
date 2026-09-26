@@ -17,6 +17,6 @@ public sealed class OtherGroupEndpoint : IEndpoint<OtherEndpointGroup>
     {
         EndpointMappingRecorder.Add(nameof(OtherGroupEndpoint));
 
-        builder.ApplyMetadata(builder.Group.MapGet(builder.Route, static () => "other"));
+        builder.MapGet(builder.Route, static () => "other");
     }
 }

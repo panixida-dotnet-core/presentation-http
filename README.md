@@ -187,23 +187,25 @@ public sealed class GetOrderEndpoint : IEndpoint<OrdersEndpointGroup>
 
     public void Map(EndpointMapBuilder builder)
     {
-        var route = builder.Group.MapGet(builder.Route, (Guid id) =>
+        builder.MapGet(builder.Route, (Guid id) =>
         {
             return TypedResults.Ok(new OrderResponse(id));
         });
-        builder.ApplyMetadata(route);
     }
 }
 
 public sealed record OrderResponse(Guid Id);
 ```
 
-Call the standard ASP.NET Core `MapGet`, `MapPost`, `MapPut`, `MapPatch`, `MapDelete`, or `MapMethods` directly with the concrete handler. `ApplyMetadata` only adds the endpoint name and summary; it does not wrap the handler. This keeps handlers visible to ASP.NET Core's Request Delegate Generator.
+`EndpointMapBuilder` implements `IEndpointRouteBuilder`, so these are the standard ASP.NET Core `MapGet`, `MapPost`, `MapPut`, `MapPatch`, `MapDelete`, and `MapMethods` extensions. Pass `builder.Route` and the concrete handler to keep it visible to ASP.NET Core's Request Delegate Generator. For a method group, use `builder.MapGet(builder.Route, Handle)`; for multiple HTTP methods, use `builder.MapMethods(builder.Route, ["HEAD", "OPTIONS"], Handle)`.
+
+The endpoint name and summary are applied automatically through an isolated route group without changing the URL or sibling endpoints. Standard ASP.NET Core metadata precedence applies: handler attributes and endpoint conventions can override these defaults. Calls such as `.RequireAuthorization()`, `.WithName()`, `.WithSummary()`, and `.AddEndpointFilter()` remain available. `Group` still exposes the original group; `ApplyMetadata` remains available for routes mapped directly on it.
 
 ## Migrating from 2.x
 
 - Rebuild every endpoint assembly with the included analyzer. Runtime assembly scanning and `ActivatorUtilities` endpoint activation have been removed.
-- Replace `builder.MapGet(handler)` with `builder.ApplyMetadata(builder.Group.MapGet(builder.Route, handler))`, and likewise for other HTTP methods.
+- Replace `builder.MapGet(handler)` with `builder.MapGet(builder.Route, handler)`, and likewise for other HTTP methods. `MapMethods` now takes `builder.Route` before the HTTP methods and handler. No separate metadata call is needed.
+- Endpoint names and summaries are now route group defaults. Handler-level `EndpointName` and `EndpointSummary` attributes can override them; in 2.x the wrapper applied the endpoint properties after handler attributes. Explicit fluent overrides remain supported.
 - Resolve ambiguous constructors explicitly with `[ActivatorUtilitiesConstructor]`. Private and open generic endpoint implementations now fail at compilation.
 - Register validation explicitly in each endpoint assembly instead of relying on `AddHttp`. On .NET 10, use public request DTOs for automatic validation discovery; the smoke application checks that an invalid request returns `400`.
 - Review configured proxy/network values: malformed values now fail explicitly. The existing configuration keys, defaults and reload behavior are retained.
@@ -227,6 +229,8 @@ One-time checks on September 26, 2026 used the packaged library, SDK `10.0.401`,
 | Independent consumer using API Versioning's `AddOpenApi()` and `WithDocumentPerVersion()`, without this library | All 7 ordinary Release checks passed. Native AOT failed during registration because `AddOpenApi()` calls unsupported `Assembly.GetCallingAssembly()`. |
 
 The API checks covered generated registration, singleton/keyed/optional constructor injection, two API versions, unsupported versions, DTO/array JSON, valid and invalid request validation, parameter binding, exception ProblemDetails, sorting, forwarded headers, and options reload. OpenAPI checks covered module grouping, substituted version paths, and DTO schemas. Serving Scalar HTML does not establish that its OpenAPI document works.
+
+The short `builder.MapGet(builder.Route, Handle)` API was also checked in a packaged consumer: all 15 checks passed under ordinary Release execution and Native AOT with the same diagnostic MVC bypasses. This included instance/static method groups, handler DI, endpoint filters, automatic name/summary metadata, and isolation from sibling routes. The short mapping API does not remove the external MVC blockers described above.
 
 The model metadata failure is also tracked in [API Versioning issue #1226](https://github.com/dotnet/aspnet-api-versioning/issues/1226), originally reported against .NET 11; this check reproduced it on .NET 10. Native compilation also reported MVC trimming/dynamic-code warnings, including `IL2026` and `IL3050`.
 

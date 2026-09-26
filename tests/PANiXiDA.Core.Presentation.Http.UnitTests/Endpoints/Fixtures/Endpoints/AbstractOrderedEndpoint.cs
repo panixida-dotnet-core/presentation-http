@@ -17,6 +17,6 @@ public abstract class AbstractOrderedEndpoint : IEndpoint<OrderedEndpointGroup>
     {
         EndpointMappingRecorder.Add(nameof(AbstractOrderedEndpoint));
 
-        builder.ApplyMetadata(builder.Group.MapGet(builder.Route, static () => "abstract"));
+        builder.MapGet(builder.Route, static () => "abstract");
     }
 }

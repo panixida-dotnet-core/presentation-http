@@ -17,6 +17,6 @@ public sealed class SecondOrderedEndpoint : IEndpoint<OrderedEndpointGroup>
     {
         EndpointMappingRecorder.Add(nameof(SecondOrderedEndpoint));
 
-        builder.ApplyMetadata(builder.Group.MapGet(builder.Route, static () => "second"));
+        builder.MapGet(builder.Route, static () => "second");
     }
 }

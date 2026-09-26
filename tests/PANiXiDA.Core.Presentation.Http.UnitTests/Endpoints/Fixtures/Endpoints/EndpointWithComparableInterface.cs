@@ -24,6 +24,6 @@ public sealed class EndpointWithComparableInterface :
     {
         EndpointMappingRecorder.Add(nameof(EndpointWithComparableInterface));
 
-        builder.ApplyMetadata(builder.Group.MapGet(builder.Route, static () => "comparable"));
+        builder.MapGet(builder.Route, static () => "comparable");
     }
 }

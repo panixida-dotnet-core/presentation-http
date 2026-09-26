@@ -5,11 +5,12 @@ using Microsoft.AspNetCore.Routing;
 namespace PANiXiDA.Core.Presentation.Http.Endpoints;
 
 /// <summary>
-/// Provides route mapping helpers for a single endpoint route.
+/// Provides a route builder with automatic name and summary defaults for a single endpoint.
 /// </summary>
-public sealed class EndpointMapBuilder
+public sealed class EndpointMapBuilder : IEndpointRouteBuilder
 {
     private readonly RouteGroupBuilder group;
+    private readonly IEndpointRouteBuilder routeBuilder;
     private readonly string route;
     private readonly string name;
     private readonly string summary;
@@ -29,6 +30,9 @@ public sealed class EndpointMapBuilder
         this.route = route;
         this.name = name;
         this.summary = summary;
+        routeBuilder = group.MapGroup(string.Empty)
+            .WithName(name)
+            .WithSummary(summary);
     }
 
     /// <summary>
@@ -73,6 +77,18 @@ public sealed class EndpointMapBuilder
         {
             return summary;
         }
+    }
+
+    /// <inheritdoc />
+    IServiceProvider IEndpointRouteBuilder.ServiceProvider => routeBuilder.ServiceProvider;
+
+    /// <inheritdoc />
+    ICollection<EndpointDataSource> IEndpointRouteBuilder.DataSources => routeBuilder.DataSources;
+
+    /// <inheritdoc />
+    IApplicationBuilder IEndpointRouteBuilder.CreateApplicationBuilder()
+    {
+        return routeBuilder.CreateApplicationBuilder();
     }
 
     /// <summary>
