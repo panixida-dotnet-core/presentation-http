@@ -51,6 +51,7 @@ internal static class OpenApiConfiguration
             serviceProvider.GetRequiredService<IApiVersionDescriptionProviderFactory>()
                 .Create(serviceProvider.GetRequiredService<EndpointDataSource>()),
             serviceProvider.GetRequiredService<IApiDescriptionGroupCollectionProvider>(),
+            serviceProvider.GetRequiredService<IOptions<ApiExplorerOptions>>().Value,
             modules));
         services.Replace(ServiceDescriptor.Singleton<IApiVersionDescriptionProvider>(serviceProvider =>
             serviceProvider.GetRequiredService<HttpModuleApiVersionDescriptionProvider>()));

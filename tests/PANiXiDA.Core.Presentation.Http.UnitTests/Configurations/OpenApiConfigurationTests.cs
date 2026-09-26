@@ -410,9 +410,13 @@ public sealed class OpenApiConfigurationTests
     }
 
     [Theory(DisplayName = "OpenAPI configuration omits versions whose endpoints are excluded from documentation")]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task UseOpenApiConfiguration_ShouldOmitExcludedVersions(bool useModule)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task UseOpenApiConfiguration_ShouldOmitExcludedVersions(
+        bool useModule,
+        bool includeUnversioned)
     {
         var assembly = typeof(OrderedEndpointGroup).Assembly;
         await using var app = await CreateStartedModuleApplicationAsync(
@@ -435,6 +439,16 @@ public sealed class OpenApiConfigurationTests
                 {
                     endpoint.WithGroupName("tests");
                 }
+
+                if (includeUnversioned)
+                {
+                    var commonEndpoint = app.MapGet("/connect", static () => "connect");
+
+                    if (useModule)
+                    {
+                        commonEndpoint.WithGroupName("tests");
+                    }
+                }
             });
         using var client = CreateClient(app);
         var documentPrefix = useModule ? "tests-" : string.Empty;
@@ -447,8 +461,71 @@ public sealed class OpenApiConfigurationTests
         scalarContent.ShouldContain($"openapi/{documentPrefix}v1.json");
         scalarContent.ShouldNotContain($"openapi/{documentPrefix}v3.json");
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var content = await client.GetStringAsync(
+            $"/openapi/{documentPrefix}v1.json",
+            TestContext.Current.CancellationToken);
+        using var document = JsonDocument.Parse(content);
+        document.RootElement.GetProperty("paths")
+            .TryGetProperty("/connect", out _)
+            .ShouldBe(includeUnversioned);
         (await client.GetStringAsync("/api/v3/hidden", TestContext.Current.CancellationToken))
             .ShouldBe("hidden");
+    }
+
+    [Theory(DisplayName = "OpenAPI configuration uses only the default document when all versioned endpoints are hidden")]
+    [InlineData(false, 1)]
+    [InlineData(true, 1)]
+    [InlineData(false, 2)]
+    [InlineData(true, 2)]
+    public async Task UseOpenApiConfiguration_ShouldUseDefaultDocumentForUnversionedEndpoints(
+        bool explicitlyNeutral,
+        int defaultVersion)
+    {
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            EnvironmentName = Environments.Development
+        });
+        builder.WebHost.UseUrls("http://127.0.0.1:0");
+        builder.Services.AddHttp(builder.Configuration);
+        builder.Services.Configure<ApiVersioningOptions>(options =>
+            options.DefaultApiVersion = new ApiVersion(defaultVersion, 0));
+        await using var app = builder.Build();
+        app.UseHttp();
+        var endpoint = app.MapGet("/connect", static () => "connect");
+
+        if (explicitlyNeutral)
+        {
+            endpoint.WithApiVersionSet(app.NewApiVersionSet().Build())
+                .IsApiVersionNeutral();
+        }
+
+        var versions = app.NewApiVersionSet()
+            .HasApiVersion(new ApiVersion(3, 0))
+            .Build();
+        app.MapGroup(EndpointConstants.EndpointPrefix)
+            .MapGet("/hidden", static () => "hidden")
+            .WithApiVersionSet(versions)
+            .MapToApiVersion(new ApiVersion(3, 0))
+            .ExcludeFromDescription();
+        await app.StartAsync(TestContext.Current.CancellationToken);
+        using var client = CreateClient(app);
+
+        var scalarContent = await client.GetStringAsync("/scalar", TestContext.Current.CancellationToken);
+        using var hiddenResponse = await client.GetAsync(
+            "/openapi/v3.json",
+            TestContext.Current.CancellationToken);
+
+        scalarContent.ShouldContain($"openapi/v{defaultVersion}.json");
+        scalarContent.ShouldNotContain("openapi/v3.json");
+        hiddenResponse.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var content = await client.GetStringAsync(
+            $"/openapi/v{defaultVersion}.json",
+            TestContext.Current.CancellationToken);
+        using var document = JsonDocument.Parse(content);
+        document.RootElement.GetProperty("paths")
+            .EnumerateObject()
+            .Select(path => path.Name)
+            .ShouldBe(["/connect"]);
     }
 
     [Theory(DisplayName = "OpenAPI configuration exposes version documents without HTTP modules")]

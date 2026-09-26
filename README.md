@@ -340,7 +340,7 @@ For Identity endpoints in versions 1 and 2 and Compendium endpoints in version 1
 
 Routes without a version appear in every document of their module. A module with only unversioned routes uses a common document, such as `/openapi/identity.json`. Empty modules produce no documents.
 Final document names must be unique ignoring case, including common module documents and versioned documents. A presentation assembly can belong to only one module.
-Without modules, documents are named by version (`v1`, `v2`, and so on); an application with only unversioned endpoints uses `v1`.
+Without modules, documents follow visible API versions (`v1`, `v2`, and so on); when only unversioned endpoints are visible, they use the configured default version (`v1` by default).
 
 The Scalar browser tab title can be configured from application configuration.
 If the title is not configured or is blank, Scalar uses its default document title.

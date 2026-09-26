@@ -10,6 +10,7 @@ namespace PANiXiDA.Core.Presentation.Http.Modularity;
 internal sealed class HttpModuleApiVersionDescriptionProvider(
     IApiVersionDescriptionProvider versionProvider,
     IApiDescriptionGroupCollectionProvider descriptionProvider,
+    ApiExplorerOptions options,
     IReadOnlyList<HttpModule> modules) : IApiVersionDescriptionProvider
 {
     public IReadOnlyList<ApiVersionDescription> ApiVersionDescriptions
@@ -20,10 +21,17 @@ internal sealed class HttpModuleApiVersionDescriptionProvider(
             var versions = versionProvider.ApiVersionDescriptions
                 .Where(version => descriptions.Any(description =>
                     !IsUnversioned(description) &&
-                    StringComparer.OrdinalIgnoreCase.Equals(description.GroupName, version.GroupName)) ||
-                    GetModule(version) is null && descriptions.Any(description =>
-                        IsUnversioned(description) && GetModule(description) is null))
+                    StringComparer.OrdinalIgnoreCase.Equals(description.GroupName, version.GroupName)))
                 .ToList();
+
+            if (!versions.Any(version => GetModule(version) is null) &&
+                descriptions.Any(description => IsUnversioned(description) && GetModule(description) is null))
+            {
+                var defaultVersion = options.DefaultApiVersion;
+                versions.Add(new ApiVersionDescription(
+                    defaultVersion,
+                    defaultVersion.ToString(options.GroupNameFormat)));
+            }
 
             foreach (var module in modules)
             {
