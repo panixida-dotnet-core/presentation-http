@@ -329,13 +329,14 @@ public sealed class OpenApiConfigurationTests
     }
 
     [Theory(DisplayName = "OpenAPI configuration rejects duplicate final document names ignoring case")]
-    [InlineData(true, "orders-v1")]
-    [InlineData(true, "ORDERS-V1")]
-    [InlineData(false, "v1")]
-    [InlineData(false, "V1")]
+    [InlineData(true, "orders-v1", "orders-v1")]
+    [InlineData(true, "ORDERS-V1", "orders-v1")]
+    [InlineData(false, "v1", "v1")]
+    [InlineData(false, "V1", "v1")]
     public async Task AddOpenApiConfiguration_ShouldRejectDuplicateDocumentNames(
         bool useVersionedModule,
-        string commonDocumentName)
+        string commonDocumentName,
+        string duplicateDocumentName)
     {
         var commonModuleAssembly = typeof(OrderedEndpointGroup).Assembly;
         var versionedModuleAssembly = typeof(OpenApiConfiguration).Assembly;
@@ -383,7 +384,7 @@ public sealed class OpenApiConfigurationTests
         var exception = Should.Throw<InvalidOperationException>(() => provider.ApiVersionDescriptions);
 
         exception.Message.ShouldBe(
-            $"The OpenAPI document name '{commonDocumentName}' is already registered. Configure unique HTTP module names.");
+            $"The OpenAPI document name '{duplicateDocumentName}' is already registered. Configure unique HTTP module names.");
     }
 
     [Fact(DisplayName = "OpenAPI configuration omits modules without endpoints")]

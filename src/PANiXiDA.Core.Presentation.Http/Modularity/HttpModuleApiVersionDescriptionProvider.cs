@@ -36,15 +36,16 @@ internal sealed class HttpModuleApiVersionDescriptionProvider(
                 versions.Add(new ApiVersionDescription(ApiVersion.Neutral, module.Name));
             }
 
-            var documentNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var duplicateDocument = versions
+                .GroupBy(
+                    static version => version.GroupName,
+                    StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault(static group => group.Count() > 1);
 
-            foreach (var version in versions)
+            if (duplicateDocument is not null)
             {
-                if (!documentNames.Add(version.GroupName))
-                {
-                    throw new InvalidOperationException(
-                        $"The OpenAPI document name '{version.GroupName}' is already registered. Configure unique HTTP module names.");
-                }
+                throw new InvalidOperationException(
+                    $"The OpenAPI document name '{duplicateDocument.Key}' is already registered. Configure unique HTTP module names.");
             }
 
             return versions;
