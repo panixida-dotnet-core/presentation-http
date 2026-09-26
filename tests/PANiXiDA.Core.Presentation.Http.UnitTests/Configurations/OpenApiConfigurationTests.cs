@@ -159,7 +159,8 @@ public sealed class OpenApiConfigurationTests
                 var versions = app.NewApiVersionSet()
                     .HasApiVersion(new ApiVersion(1, 0))
                     .Build();
-                app.MapGet("/api/v{version:apiVersion}/core", static () => "core")
+                app.MapGroup(EndpointConstants.EndpointPrefix)
+                    .MapGet("/core", static () => "core")
                     .WithGroupName("core")
                     .WithApiVersionSet(versions)
                     .MapToApiVersion(new ApiVersion(1, 0));
@@ -290,7 +291,8 @@ public sealed class OpenApiConfigurationTests
                 .HasApiVersion(new ApiVersion(1, 0))
                 .HasApiVersion(new ApiVersion(2, 0))
                 .Build();
-            app.MapGet("/api/v{version:apiVersion}/external", static () => "external")
+            app.MapGroup(EndpointConstants.EndpointPrefix)
+                .MapGet("/external", static () => "external")
                 .WithApiVersionSet(versions)
                 .MapToApiVersion(new ApiVersion(1, 0))
                 .MapToApiVersion(new ApiVersion(2, 0));
@@ -363,7 +365,8 @@ public sealed class OpenApiConfigurationTests
                 var versions = app.NewApiVersionSet()
                     .HasApiVersion(version)
                     .Build();
-                var endpoint = app.MapGet("/api/v{version:apiVersion}/hidden", static () => "hidden")
+                var endpoint = app.MapGroup(EndpointConstants.EndpointPrefix)
+                    .MapGet("/hidden", static () => "hidden")
                     .WithApiVersionSet(versions)
                     .MapToApiVersion(version)
                     .ExcludeFromDescription();
