@@ -201,6 +201,105 @@ public sealed class ForwardedHeadersConfigurationTests
         Should.Throw<FormatException>(() => CreateOptions(services));
     }
 
+    [Theory(DisplayName = "Forwarded headers binding requires an explicit network prefix length")]
+    [InlineData("ForwardedHeaders:KnownIPNetworks:0", "10.0.0.0")]
+    [InlineData("ForwardedHeaders:KnownNetworks:0", "10.0.0.0")]
+    [InlineData("ForwardedHeaders:KnownIPNetworks:0", "2001:db8::")]
+    [InlineData("ForwardedHeaders:KnownNetworks:0", "2001:db8::")]
+    [InlineData("KnownIPNetworks:0", "10.0.0.0")]
+    [InlineData("KnownNetworks:0", "2001:db8::")]
+    public void AddForwardedHeadersConfiguration_ShouldRequireNetworkPrefixLength(
+        string networkPath,
+        string prefix)
+    {
+        var services = new ServiceCollection();
+        var configuration = CreateConfiguration(new Dictionary<string, string?>
+        {
+            [$"{networkPath}:Prefix"] = prefix
+        });
+        services.AddForwardedHeadersConfiguration(configuration);
+
+        var exception = Should.Throw<InvalidOperationException>(() => CreateOptions(services));
+
+        exception.Message.ShouldBe($"Configuration value '{networkPath}:PrefixLength' is required.");
+    }
+
+    [Theory(DisplayName = "Forwarded headers binding rejects null and empty network prefix lengths")]
+    [InlineData("KnownIPNetworks", null)]
+    [InlineData("KnownNetworks", null)]
+    [InlineData("KnownIPNetworks", "")]
+    [InlineData("KnownNetworks", "")]
+    public void AddForwardedHeadersConfiguration_ShouldRejectEmptyNetworkPrefixLength(
+        string sectionName,
+        string? prefixLength)
+    {
+        var services = new ServiceCollection();
+        var networkPath = $"ForwardedHeaders:{sectionName}:0";
+        var configuration = CreateConfiguration(new Dictionary<string, string?>
+        {
+            [$"{networkPath}:Prefix"] = "10.0.0.0",
+            [$"{networkPath}:PrefixLength"] = prefixLength
+        });
+        services.AddForwardedHeadersConfiguration(configuration);
+
+        var exception = Should.Throw<InvalidOperationException>(() => CreateOptions(services));
+
+        exception.Message.ShouldBe($"Configuration value '{networkPath}:PrefixLength' is required.");
+    }
+
+    [Theory(DisplayName = "Forwarded headers binding preserves explicitly configured zero prefix lengths")]
+    [InlineData("KnownIPNetworks", "0.0.0.0", "203.0.113.1")]
+    [InlineData("KnownNetworks", "0.0.0.0", "203.0.113.1")]
+    [InlineData("KnownIPNetworks", "::", "2001:db8::1")]
+    [InlineData("KnownNetworks", "::", "2001:db8::1")]
+    public void AddForwardedHeadersConfiguration_ShouldPreserveExplicitZeroPrefixLength(
+        string sectionName,
+        string prefix,
+        string address)
+    {
+        var services = new ServiceCollection();
+        var configuration = CreateConfiguration(new Dictionary<string, string?>
+        {
+            [$"ForwardedHeaders:{sectionName}:0:Prefix"] = prefix,
+            [$"ForwardedHeaders:{sectionName}:0:PrefixLength"] = "0"
+        });
+        services.AddForwardedHeadersConfiguration(configuration);
+
+        var network = CreateOptions(services).KnownIPNetworks.ShouldHaveSingleItem();
+
+        network.PrefixLength.ShouldBe(0);
+        network.Contains(IPAddress.Parse(address)).ShouldBeTrue();
+    }
+
+    [Theory(DisplayName = "Forwarded headers options reject a removed network prefix length on reload")]
+    [InlineData("KnownIPNetworks")]
+    [InlineData("KnownNetworks")]
+    public void AddForwardedHeadersConfiguration_ShouldRejectMissingNetworkPrefixLengthOnReload(string sectionName)
+    {
+        var services = new ServiceCollection();
+        var networkPath = $"ForwardedHeaders:{sectionName}:0";
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [$"{networkPath}:Prefix"] = "10.0.0.0",
+                [$"{networkPath}:PrefixLength"] = "8"
+            })
+            .Build();
+        services.AddForwardedHeadersConfiguration(configuration);
+        using var provider = services.BuildServiceProvider();
+        var monitor = provider.GetRequiredService<IOptionsMonitor<ForwardedHeadersOptions>>();
+        monitor.CurrentValue.KnownIPNetworks.ShouldHaveSingleItem().PrefixLength.ShouldBe(8);
+
+        configuration[$"{networkPath}:PrefixLength"] = null;
+        Should.Throw<AggregateException>(() => configuration.Reload());
+        var exception = Should.Throw<InvalidOperationException>(() => monitor.CurrentValue);
+
+        exception.Message.ShouldBe($"Configuration value '{networkPath}:PrefixLength' is required.");
+        configuration[$"{networkPath}:PrefixLength"] = "16";
+        configuration.Reload();
+        monitor.CurrentValue.KnownIPNetworks.ShouldHaveSingleItem().PrefixLength.ShouldBe(16);
+    }
+
     private static ForwardedHeadersOptions CreateOptions(IServiceCollection services)
     {
         using var serviceProvider = services.BuildServiceProvider();

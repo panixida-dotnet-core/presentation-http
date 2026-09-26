@@ -114,7 +114,9 @@ internal static class ForwardedHeadersConfiguration
         {
             options.KnownIPNetworks.Add(new System.Net.IPNetwork(
                 IPAddress.Parse(network.GetValue("Prefix", string.Empty)),
-                network.GetValue<int>("PrefixLength")));
+                network.GetValue<int?>("PrefixLength") ??
+                    throw new InvalidOperationException(
+                        $"Configuration value '{network.Path}:PrefixLength' is required.")));
         }
     }
 
