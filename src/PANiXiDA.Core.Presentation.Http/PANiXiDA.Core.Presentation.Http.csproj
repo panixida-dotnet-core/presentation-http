@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <IsPackable>true</IsPackable>
-        <IsAotCompatible>true</IsAotCompatible>
+        <IsAotCompatible>false</IsAotCompatible>
         <EnableConfigurationBindingGenerator>true</EnableConfigurationBindingGenerator>
 
         <AssemblyName>PANiXiDA.Core.Presentation.Http</AssemblyName>
