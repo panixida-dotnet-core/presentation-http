@@ -14,6 +14,7 @@ using PANiXiDA.Core.Presentation.Http.DependencyInjection;
 using PANiXiDA.Core.Presentation.Http.UnitTests.Endpoints;
 using PANiXiDA.Core.Presentation.Http.UnitTests.Endpoints.Fixtures.Groups;
 
+using System.ComponentModel.DataAnnotations;
 using System.Net;
 using System.Reflection;
 using System.Text;
@@ -349,6 +350,28 @@ public sealed class ServiceCollectionExtensionsTests
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         content.ShouldBe("Healthy");
+    }
+
+    [Theory(DisplayName = "AddHttp enables validation attributes on handler parameters")]
+    [InlineData(0, HttpStatusCode.BadRequest)]
+    [InlineData(3, HttpStatusCode.OK)]
+    public async Task AddHttp_ShouldValidateHandlerParameters(
+        int count,
+        HttpStatusCode expectedStatus)
+    {
+        await using var app = await CreateStartedApplicationAsync(
+            Environments.Production,
+            TestContext.Current.CancellationToken,
+            static application => application.MapGet(
+                "/validated",
+                static ([Range(1, 10)] int count) => TypedResults.Ok(count)));
+        using var client = CreateClient(app);
+
+        using var response = await client.GetAsync(
+            $"/validated?count={count}",
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(expectedStatus);
     }
 
     private static async Task<WebApplication> CreateStartedThrowingApplicationAsync(

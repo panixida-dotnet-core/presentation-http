@@ -57,7 +57,7 @@ app.Run();
 
 Reference the package directly in each project that declares endpoints, and keep its `analyzers` assets enabled.
 `AddHttp` retains the MVC-based API Versioning explorer and is not supported in a trimmed or Native AOT application; see [Native AOT](#native-aot) for the supported boundary.
-Call `AddValidation()` in each assembly containing endpoint DTOs, so ASP.NET Core can generate its validation metadata there.
+`AddHttp` registers the standard validation infrastructure, including validation attributes on handler parameters. Also call `AddValidation()` in each assembly containing endpoint DTOs, so ASP.NET Core can generate and register metadata for their properties. A call inside this package cannot generate metadata for a consuming assembly. This is a source-generator discovery requirement, not an AOT incompatibility of `AddValidation`; see [validation across assemblies](https://learn.microsoft.com/aspnet/core/fundamentals/validation?view=aspnetcore-10.0#register-validation-across-assemblies).
 
 ## Forwarded Headers
 
@@ -207,10 +207,12 @@ The endpoint name and summary are applied automatically through an isolated rout
 - Replace `builder.MapGet(handler)` with `builder.MapGet(builder.Route, handler)`, and likewise for other HTTP methods. `MapMethods` now takes `builder.Route` before the HTTP methods and handler. No separate metadata call is needed.
 - Endpoint names and summaries are now route group defaults. Handler-level `EndpointName` and `EndpointSummary` attributes can override them; in 2.x the wrapper applied the endpoint properties after handler attributes. Explicit fluent overrides remain supported.
 - Resolve ambiguous constructors explicitly with `[ActivatorUtilitiesConstructor]`. Private and open generic endpoint implementations now fail at compilation.
-- Register validation explicitly in each endpoint assembly instead of relying on `AddHttp`. On .NET 10, use public request DTOs for automatic validation discovery; the smoke application checks that an invalid request returns `400`.
+- `AddHttp` retains the standard validation infrastructure. Additionally call `AddValidation()` in each endpoint/DTO assembly to generate that assembly's model validation metadata. On .NET 10, use public request DTOs for automatic validation discovery; the smoke application checks that an invalid request returns `400`.
 - Review configured proxy/network values: malformed values now fail explicitly. The existing configuration keys, defaults and reload behavior are retained.
 - Core dependencies are Application `4.0.3`, ResultPattern `1.0.4`, and transitive Domain `3.0.1`.
 - API Versioning is `10.2.3`, ASP.NET Core OpenAPI is `10.0.12`, and Scalar is `2.17.10`. OpenAPI documents remain grouped by HTTP module, with all of that module's API versions included. The runtime project suppresses API Versioning diagnostics `AV0029` and `AV0030` for this intentional document layout; it does not enable the separate document-per-version integration or suppress trimming/AOT diagnostics.
+
+`AV0029` recommends replacing standard OpenAPI registration with API Versioning's OpenAPI integration; its analyzer also triggers on our versioned ApiExplorer registration. `AV0030` requires `WithDocumentPerVersion()`, while our documents intentionally contain every version of one module. Removing the suppression produces build errors, including `AV0029` in Microsoft's generated XML-comment integration. The upstream documentation permits suppression of [AV0029](https://dotnet.github.io/aspnet-api-versioning/diagnostic/av0029.html) and, for documents containing all versions, [AV0030](https://dotnet.github.io/aspnet-api-versioning/diagnostic/av0030.html).
 
 ## Native AOT
 
@@ -231,6 +233,8 @@ One-time checks on September 26, 2026 used the packaged library, SDK `10.0.401`,
 The API checks covered generated registration, singleton/keyed/optional constructor injection, two API versions, unsupported versions, DTO/array JSON, valid and invalid request validation, parameter binding, exception ProblemDetails, sorting, forwarded headers, and options reload. OpenAPI checks covered module grouping, substituted version paths, and DTO schemas. Serving Scalar HTML does not establish that its OpenAPI document works.
 
 The short `builder.MapGet(builder.Route, Handle)` API was also checked in a packaged consumer: all 15 checks passed under ordinary Release execution and Native AOT with the same diagnostic MVC bypasses. This included instance/static method groups, handler DI, endpoint filters, automatic name/summary metadata, and isolation from sibling routes. The short mapping API does not remove the external MVC blockers described above.
+
+After restoring validation registration in `AddHttp`, the expanded consumer passed 17 checks under ordinary Release execution and Native AOT with the same diagnostic MVC bypasses. Invalid handler parameters returned `400` with `AddHttp` alone. Invalid DTO properties returned `400` only when `AddValidation()` also ran in the consumer assembly; without that call they returned `200`, confirming the missing model metadata rather than an AOT failure.
 
 The model metadata failure is also tracked in [API Versioning issue #1226](https://github.com/dotnet/aspnet-api-versioning/issues/1226), originally reported against .NET 11; this check reproduced it on .NET 10. Native compilation also reported MVC trimming/dynamic-code warnings, including `IL2026` and `IL3050`.
 
