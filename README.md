@@ -271,19 +271,42 @@ OpenAPI registration also enables Scalar transformers for Scalar-specific docume
 
 ### Bearer authentication
 
-`AddHttp` describes endpoints requiring authorization with an HTTP `Bearer` security scheme.
-This enables token input and authenticated requests in Scalar. Enter the access token without
-the `Bearer` prefix; Scalar sends it as `Authorization: Bearer <access_token>`.
+`AddHttp` adds an HTTP `Bearer` security requirement to operations whose resolved authorization
+policy accepts a Bearer authentication scheme. This enables token input and authenticated requests
+in Scalar. Enter the access token without the `Bearer` prefix; Scalar sends it as
+`Authorization: Bearer <access_token>`.
 
-Authorization metadata from endpoints and route groups (`RequireAuthorization`, `[Authorize]`,
-and authorization policies) and the application's fallback policy are respected.
-`AllowAnonymous` endpoints remain public. The scheme is added only to documents containing
-protected operations, including versioned and unversioned module documents.
+Endpoint and route-group metadata (`RequireAuthorization`, `[Authorize]`, and explicit policies)
+are combined with named, default, and fallback policies through ASP.NET Core's policy provider.
+When the resulting policy does not select authentication schemes, the default authenticate scheme
+is used. `AllowAnonymous` endpoints are excluded. Cookie-only policies and other unmapped schemes
+do not receive a Bearer requirement, even when Bearer is the host's default scheme.
 
-The host must configure bearer authentication, authorization services, and middleware.
-This OpenAPI convention documents protected operations as Bearer; it does not register an
-authentication handler or change server-side access checks. Both JWT and opaque access tokens
-are supported; the scheme does not prescribe a token format.
+The standard scheme names `Bearer` and `BearerToken` are recognized by convention.
+Declare additional Bearer scheme names in `ScalarConfiguration:BearerAuthenticationSchemes`.
+For an OpenIddict host using validation for API requests and the server handler for UserInfo:
+
+```json
+{
+  "ScalarConfiguration": {
+    "BearerAuthenticationSchemes": [
+      "OpenIddict.Validation.AspNetCore",
+      "OpenIddict.Server.AspNetCore"
+    ]
+  }
+}
+```
+
+Names are case-sensitive and must match the host's authentication registrations. Include a forwarding
+policy scheme only if it accepts Bearer tokens. The library does not infer protocols from custom
+handlers or forwarding selectors, and it does not generate documentation for Cookie or certificate
+authentication. The Bearer component is added only to documents with matching operations, including
+versioned and unversioned module documents.
+
+The host must configure authentication, authorization services, and middleware. This configuration
+only maps authentication scheme names to OpenAPI Bearer security; it does not register handlers or
+change server-side access checks. Both JWT and opaque tokens are supported without prescribing a
+token format.
 
 ### Dynamic sorting
 

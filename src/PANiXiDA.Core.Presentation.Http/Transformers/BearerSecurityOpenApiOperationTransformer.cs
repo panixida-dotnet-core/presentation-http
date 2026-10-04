@@ -1,11 +1,17 @@
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.BearerToken;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Microsoft.OpenApi;
+
+using PANiXiDA.Core.Presentation.Http.Configurations;
 
 namespace PANiXiDA.Core.Presentation.Http.Transformers;
 
-internal sealed class BearerSecurityOpenApiOperationTransformer : IOpenApiOperationTransformer
+internal sealed class BearerSecurityOpenApiOperationTransformer(
+    IOptions<ScalarConfiguration> configuration) : IOpenApiOperationTransformer
 {
     private const string SchemeName = "Bearer";
 
@@ -20,15 +26,17 @@ internal sealed class BearerSecurityOpenApiOperationTransformer : IOpenApiOperat
             return;
         }
 
-        var requiresAuthorization = metadata.Any(item => item is IAuthorizeData or AuthorizationPolicy);
-        if (!requiresAuthorization)
+        var policyProvider = context.ApplicationServices.GetService<IAuthorizationPolicyProvider>();
+        if (policyProvider is null)
         {
-            var policyProvider = context.ApplicationServices.GetService<IAuthorizationPolicyProvider>();
-            requiresAuthorization = policyProvider is not null
-                && await policyProvider.GetFallbackPolicyAsync() is not null;
+            return;
         }
 
-        if (!requiresAuthorization)
+        var policy = await AuthorizationPolicy.CombineAsync(
+            policyProvider,
+            metadata.OfType<IAuthorizeData>(),
+            metadata.OfType<AuthorizationPolicy>());
+        if (policy is null || !await AcceptsBearerAuthenticationAsync(policy, context.ApplicationServices))
         {
             return;
         }
@@ -52,5 +60,32 @@ internal sealed class BearerSecurityOpenApiOperationTransformer : IOpenApiOperat
                 [schemeReference] = []
             });
         }
+    }
+
+    private async Task<bool> AcceptsBearerAuthenticationAsync(
+        AuthorizationPolicy policy,
+        IServiceProvider services)
+    {
+        IEnumerable<string> schemes = policy.AuthenticationSchemes;
+        if (policy.AuthenticationSchemes.Count == 0)
+        {
+            var schemeProvider = services.GetService<IAuthenticationSchemeProvider>();
+            if (schemeProvider is null)
+            {
+                return false;
+            }
+
+            var defaultScheme = await schemeProvider.GetDefaultAuthenticateSchemeAsync();
+            if (defaultScheme is null)
+            {
+                return false;
+            }
+
+            schemes = [defaultScheme.Name];
+        }
+
+        return schemes.Any(scheme =>
+            scheme is SchemeName or BearerTokenDefaults.AuthenticationScheme ||
+            configuration.Value.BearerAuthenticationSchemes.Contains(scheme, StringComparer.Ordinal));
     }
 }

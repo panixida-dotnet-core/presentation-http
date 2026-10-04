@@ -1,5 +1,7 @@
 using Asp.Versioning;
 
+using Microsoft.AspNetCore.Authentication.BearerToken;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -30,7 +32,7 @@ public sealed class OpenApiBearerAuthenticationTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var builder = CreateBuilder();
-        builder.Services.AddAuthentication("TestBearer").AddBearerToken("TestBearer");
+        builder.Services.AddAuthentication(BearerTokenDefaults.AuthenticationScheme).AddBearerToken();
         builder.Services.AddAuthorizationBuilder()
             .AddPolicy("Readers", policy => policy.RequireAuthenticatedUser());
         var module = new HttpModule("users", "Users", typeof(OpenApiBearerAuthenticationTests).Assembly);
@@ -85,8 +87,8 @@ public sealed class OpenApiBearerAuthenticationTests
             AssertBearerRequired(document, $"/api/{version}/policy");
             AssertBearerRequired(document, $"/api/{version}/named-policy");
             AssertBearerRequired(document, "/common");
-            AssertAnonymous(document, $"/api/{version}/protected/anonymous");
-            AssertAnonymous(document, $"/api/{version}/public");
+            AssertNoSecurityRequirement(document, $"/api/{version}/protected/anonymous");
+            AssertNoSecurityRequirement(document, $"/api/{version}/public");
         }
     }
 
@@ -95,7 +97,7 @@ public sealed class OpenApiBearerAuthenticationTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var builder = CreateBuilder();
-        builder.Services.AddAuthentication("TestBearer").AddBearerToken("TestBearer");
+        builder.Services.AddAuthentication(BearerTokenDefaults.AuthenticationScheme).AddBearerToken();
         builder.Services.AddAuthorizationBuilder()
             .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
         builder.Services.AddHttp(builder.Configuration);
@@ -111,7 +113,7 @@ public sealed class OpenApiBearerAuthenticationTests
 
         document.ShouldNotBeNull();
         AssertBearerRequired(document, "/protected");
-        AssertAnonymous(document, "/anonymous");
+        AssertNoSecurityRequirement(document, "/anonymous");
     }
 
     [Theory(DisplayName = "Public APIs do not receive a Bearer scheme or require authorization services")]
@@ -123,7 +125,7 @@ public sealed class OpenApiBearerAuthenticationTests
         var builder = CreateBuilder();
         if (registerAuthentication)
         {
-            builder.Services.AddAuthentication("TestBearer").AddBearerToken("TestBearer");
+            builder.Services.AddAuthentication(BearerTokenDefaults.AuthenticationScheme).AddBearerToken();
             builder.Services.AddAuthorization();
         }
 
@@ -137,7 +139,7 @@ public sealed class OpenApiBearerAuthenticationTests
         using var document = await client.GetFromJsonAsync<JsonDocument>("/openapi/v1.json", cancellationToken);
 
         document.ShouldNotBeNull();
-        AssertAnonymous(document, "/public");
+        AssertNoSecurityRequirement(document, "/public");
         AssertNoSecuritySchemes(document);
     }
 
@@ -146,7 +148,7 @@ public sealed class OpenApiBearerAuthenticationTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var builder = CreateBuilder();
-        builder.Services.AddAuthentication("TestBearer").AddBearerToken("TestBearer");
+        builder.Services.AddAuthentication(BearerTokenDefaults.AuthenticationScheme).AddBearerToken();
         builder.Services.AddAuthorization();
         var users = new HttpModule("users", "Users", typeof(OpenApiBearerAuthenticationTests).Assembly);
         var catalog = new HttpModule("catalog", "Catalog", typeof(OpenApiConfiguration).Assembly);
@@ -167,8 +169,182 @@ public sealed class OpenApiBearerAuthenticationTests
         AssertBearerRequired(usersDocument, "/users");
         usersDocument.RootElement.GetProperty("components").GetProperty("securitySchemes")
             .TryGetProperty("Bearer", out _).ShouldBeTrue();
-        AssertAnonymous(catalogDocument, "/catalog");
+        AssertNoSecurityRequirement(catalogDocument, "/catalog");
         AssertNoSecuritySchemes(catalogDocument);
+    }
+
+    [Theory(DisplayName = "OpenAPI respects authentication schemes selected by endpoint and named policies")]
+    [InlineData("Bearer")]
+    [InlineData(BearerTokenDefaults.AuthenticationScheme)]
+    [InlineData(CookieAuthenticationDefaults.AuthenticationScheme)]
+    public async Task AddHttp_ShouldRespectPolicyAuthenticationSchemes(string defaultScheme)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var builder = CreateBuilder();
+        builder.Services.AddAuthentication(defaultScheme).AddBearerToken().AddBearerToken("Bearer").AddCookie();
+        builder.Services.AddAuthorizationBuilder()
+            .AddPolicy("CookieOnly", policy => policy
+                .AddAuthenticationSchemes(CookieAuthenticationDefaults.AuthenticationScheme)
+                .RequireAuthenticatedUser())
+            .AddPolicy("BearerOnly", policy => policy
+                .AddAuthenticationSchemes(BearerTokenDefaults.AuthenticationScheme)
+                .RequireAuthenticatedUser());
+        builder.Services.AddHttp(builder.Configuration);
+        await using var app = builder.Build();
+        app.MapGet("/cookie-attribute", () => TypedResults.Ok()).RequireAuthorization(new AuthorizeAttribute
+        {
+            AuthenticationSchemes = CookieAuthenticationDefaults.AuthenticationScheme
+        });
+        app.MapGet("/cookie-policy", () => TypedResults.Ok()).RequireAuthorization(
+            new AuthorizationPolicyBuilder(CookieAuthenticationDefaults.AuthenticationScheme)
+                .RequireAuthenticatedUser().Build());
+        app.MapGet("/cookie-named", () => TypedResults.Ok()).RequireAuthorization("CookieOnly");
+        app.MapGet("/bearer", () => TypedResults.Ok()).RequireAuthorization("BearerOnly");
+        app.MapGet("/mixed", () => TypedResults.Ok()).RequireAuthorization("CookieOnly", "BearerOnly");
+        app.MapGet("/default", () => TypedResults.Ok()).RequireAuthorization();
+        app.UseOpenApiConfiguration();
+        await app.StartAsync(cancellationToken);
+        using var client = CreateClient(app);
+
+        using var document = await client.GetFromJsonAsync<JsonDocument>("/openapi/v1.json", cancellationToken);
+
+        document.ShouldNotBeNull();
+        AssertNoSecurityRequirement(document, "/cookie-attribute");
+        AssertNoSecurityRequirement(document, "/cookie-policy");
+        AssertNoSecurityRequirement(document, "/cookie-named");
+        AssertBearerRequired(document, "/bearer");
+        AssertBearerRequired(document, "/mixed");
+        if (defaultScheme != CookieAuthenticationDefaults.AuthenticationScheme)
+        {
+            AssertBearerRequired(document, "/default");
+        }
+        else
+        {
+            AssertNoSecurityRequirement(document, "/default");
+        }
+    }
+
+    [Theory(DisplayName = "OpenAPI respects schemes from default and fallback authorization policies")]
+    [InlineData(BearerTokenDefaults.AuthenticationScheme, false)]
+    [InlineData(BearerTokenDefaults.AuthenticationScheme, true)]
+    [InlineData(CookieAuthenticationDefaults.AuthenticationScheme, false)]
+    [InlineData(CookieAuthenticationDefaults.AuthenticationScheme, true)]
+    public async Task AddHttp_ShouldRespectDefaultAndFallbackPolicySchemes(string scheme, bool useFallback)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var builder = CreateBuilder();
+        var defaultScheme = scheme == BearerTokenDefaults.AuthenticationScheme
+            ? CookieAuthenticationDefaults.AuthenticationScheme
+            : BearerTokenDefaults.AuthenticationScheme;
+        builder.Services.AddAuthentication(defaultScheme).AddBearerToken().AddCookie();
+        var policy = new AuthorizationPolicyBuilder(scheme).RequireAuthenticatedUser().Build();
+        var authorization = builder.Services.AddAuthorizationBuilder();
+        if (useFallback)
+        {
+            authorization.SetFallbackPolicy(policy);
+        }
+        else
+        {
+            authorization.SetDefaultPolicy(policy);
+        }
+
+        builder.Services.AddHttp(builder.Configuration);
+        await using var app = builder.Build();
+        var endpoint = app.MapGet("/protected", () => TypedResults.Ok());
+        if (!useFallback)
+        {
+            endpoint.RequireAuthorization();
+        }
+
+        app.MapGet("/anonymous", () => TypedResults.Ok()).RequireAuthorization().AllowAnonymous();
+        app.MapOpenApi().WithDocumentPerVersion().AllowAnonymous();
+        await app.StartAsync(cancellationToken);
+        using var client = CreateClient(app);
+
+        using var document = await client.GetFromJsonAsync<JsonDocument>("/openapi/v1.json", cancellationToken);
+
+        document.ShouldNotBeNull();
+        AssertNoSecurityRequirement(document, "/anonymous");
+        if (scheme == BearerTokenDefaults.AuthenticationScheme)
+        {
+            AssertBearerRequired(document, "/protected");
+        }
+        else
+        {
+            AssertNoSecurityRequirement(document, "/protected");
+            AssertNoSecuritySchemes(document);
+        }
+    }
+
+    [Theory(DisplayName = "Custom Bearer scheme names must be explicitly configured for OpenAPI")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AddHttp_ShouldRespectConfiguredBearerSchemeNames(bool configureScheme)
+    {
+        const string scheme = "CustomAccessToken";
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var builder = CreateBuilder();
+        builder.Services.AddAuthentication(scheme).AddBearerToken(scheme).AddCookie();
+        builder.Services.AddAuthorization();
+        if (configureScheme)
+        {
+            builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ScalarConfiguration:BearerAuthenticationSchemes:0"] = scheme
+            });
+        }
+
+        builder.Services.AddHttp(builder.Configuration);
+        await using var app = builder.Build();
+        app.MapGet("/default", () => TypedResults.Ok()).RequireAuthorization();
+        app.MapGet("/explicit", () => TypedResults.Ok()).RequireAuthorization(new AuthorizeAttribute
+        {
+            AuthenticationSchemes = scheme
+        });
+        app.UseOpenApiConfiguration();
+        await app.StartAsync(cancellationToken);
+        using var client = CreateClient(app);
+
+        using var document = await client.GetFromJsonAsync<JsonDocument>("/openapi/v1.json", cancellationToken);
+
+        document.ShouldNotBeNull();
+        if (configureScheme)
+        {
+            AssertBearerRequired(document, "/default");
+            AssertBearerRequired(document, "/explicit");
+        }
+        else
+        {
+            AssertNoSecurityRequirement(document, "/default");
+            AssertNoSecurityRequirement(document, "/explicit");
+            AssertNoSecuritySchemes(document);
+        }
+    }
+
+    [Theory(DisplayName = "OpenAPI does not infer Bearer when no default authentication scheme is selected")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AddHttp_ShouldNotInferBearerWithoutDefaultScheme(bool registerAuthentication)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var builder = CreateBuilder();
+        if (registerAuthentication)
+        {
+            builder.Services.AddAuthentication().AddBearerToken().AddCookie();
+        }
+        builder.Services.AddAuthorization();
+        builder.Services.AddHttp(builder.Configuration);
+        await using var app = builder.Build();
+        app.MapGet("/protected", () => TypedResults.Ok()).RequireAuthorization();
+        app.UseOpenApiConfiguration();
+        await app.StartAsync(cancellationToken);
+        using var client = CreateClient(app);
+
+        using var document = await client.GetFromJsonAsync<JsonDocument>("/openapi/v1.json", cancellationToken);
+
+        document.ShouldNotBeNull();
+        AssertNoSecurityRequirement(document, "/protected");
+        AssertNoSecuritySchemes(document);
     }
 
     private static WebApplicationBuilder CreateBuilder()
@@ -196,7 +372,7 @@ public sealed class OpenApiBearerAuthenticationTests
         security[0].GetProperty("Bearer").GetArrayLength().ShouldBe(0);
     }
 
-    private static void AssertAnonymous(JsonDocument document, string path)
+    private static void AssertNoSecurityRequirement(JsonDocument document, string path)
     {
         var operation = document.RootElement.GetProperty("paths").GetProperty(path).GetProperty("get");
         operation.TryGetProperty("security", out _).ShouldBeFalse();
