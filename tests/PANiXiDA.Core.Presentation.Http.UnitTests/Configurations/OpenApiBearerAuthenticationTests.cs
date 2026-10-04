@@ -31,8 +31,8 @@ public sealed class OpenApiBearerAuthenticationTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var builder = CreateBuilder();
         builder.Services.AddAuthentication("TestBearer").AddBearerToken("TestBearer");
-        builder.Services.AddAuthorization(options =>
-            options.AddPolicy("Readers", policy => policy.RequireAuthenticatedUser()));
+        builder.Services.AddAuthorizationBuilder()
+            .AddPolicy("Readers", policy => policy.RequireAuthenticatedUser());
         var module = new HttpModule("users", "Users", typeof(OpenApiBearerAuthenticationTests).Assembly);
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
@@ -96,10 +96,8 @@ public sealed class OpenApiBearerAuthenticationTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var builder = CreateBuilder();
         builder.Services.AddAuthentication("TestBearer").AddBearerToken("TestBearer");
-        builder.Services.AddAuthorization(options =>
-        {
-            options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build();
-        });
+        builder.Services.AddAuthorizationBuilder()
+            .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
         builder.Services.AddHttp(builder.Configuration);
         await using var app = builder.Build();
         app.MapGet("/protected", () => TypedResults.Ok());
