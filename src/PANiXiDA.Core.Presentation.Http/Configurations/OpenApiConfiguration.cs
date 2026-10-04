@@ -37,6 +37,7 @@ internal static class OpenApiConfiguration
                 var documents = serviceProvider.GetRequiredService<HttpModuleApiVersionDescriptionProvider>();
                 options.Document.AddScalarTransformers();
                 options.Document.AddOperationTransformer<SortFieldArrayOpenApiOperationTransformer>();
+                options.Document.AddOperationTransformer<BearerSecurityOpenApiOperationTransformer>();
                 options.Document.ShouldInclude = description =>
                     documents.ShouldInclude(description, options.Description);
                 options.Document.AddDocumentTransformer((document, _, _) =>

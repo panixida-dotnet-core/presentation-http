@@ -269,6 +269,22 @@ In `Development`, `UseHttp` exposes:
 
 OpenAPI registration also enables Scalar transformers for Scalar-specific document extensions.
 
+### Bearer authentication
+
+`AddHttp` describes endpoints requiring authorization with an HTTP `Bearer` security scheme.
+This enables token input and authenticated requests in Scalar. Enter the access token without
+the `Bearer` prefix; Scalar sends it as `Authorization: Bearer <access_token>`.
+
+Authorization metadata from endpoints and route groups (`RequireAuthorization`, `[Authorize]`,
+and authorization policies) and the application's fallback policy are respected.
+`AllowAnonymous` endpoints remain public. The scheme is added only to documents containing
+protected operations, including versioned and unversioned module documents.
+
+The host must configure bearer authentication, authorization services, and middleware.
+This OpenAPI convention documents protected operations as Bearer; it does not register an
+authentication handler or change server-side access checks. Both JWT and opaque access tokens
+are supported; the scheme does not prescribe a token format.
+
 ### Dynamic sorting
 
 Accept `SortingParameters` directly with `[AsParameters]` and pass it to the application layer:
