@@ -16,7 +16,7 @@ It provides common Minimal API endpoint conventions, API versioning, OpenAPI set
 
 - `AddHttp` registers the default HTTP presentation services.
 - `UseHttp` adds the default middleware pipeline and maps source-generated endpoint registrations.
-- JSON numeric values use strict number handling.
+- HTTP JSON contracts enforce required constructor parameters, nullable annotations, and strict number handling.
 - Module assemblies can be mapped to separate OpenAPI documents and Scalar sources for each API version through the `HttpModules` configuration section.
 - Health checks are registered by `AddHttp` and exposed at `/health` by `UseHttp`.
 - `IEndpointGroup` defines route, resource name, and API version metadata for Minimal API endpoint groups.
@@ -38,7 +38,7 @@ Reference the package in each endpoint project with its analyzer assets enabled.
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="PANiXiDA.Core.Presentation.Http" Version="3.0.0" />
+  <PackageReference Include="PANiXiDA.Core.Presentation.Http" Version="4.0.0" />
 </ItemGroup>
 ```
 
@@ -256,9 +256,20 @@ Validation error fields are used as `ValidationProblem` keys. If a validation er
 
 ## JSON
 
-`AddHttp` configures strict JSON number handling. Numeric properties in JSON request bodies must be encoded as JSON numbers rather than quoted strings. This also keeps numeric OpenAPI schemas typed as `integer` or `number` instead of an `integer | string` or `number | string` union.
+`AddHttp` enables `RespectRequiredConstructorParameters`, `RespectNullableAnnotations`, and strict number handling for Minimal API JSON requests and responses. Missing constructor parameters without defaults and explicit `null` for non-nullable reference properties or parameters produce HTTP `400`.
 
-String properties and enums configured for string serialization are unaffected.
+Use defaults for optional constructor parameters:
+
+```csharp
+public sealed record CreateRequest(
+    string Name,
+    string? RequiredNote,
+    int? Shots = null);
+```
+
+`name` and `requiredNote` must be present. `name` must not be `null`; `requiredNote` may be `null`. `shots` may be omitted or set to `null`. For property-based DTOs, use `required` or `[JsonRequired]` to require presence.
+
+Non-nullable reference properties in responses must contain non-null values. Validate collection elements, generic members, and business rules separately. Send numbers as JSON numbers; enums use strings. These settings do not affect form/query binding or separately configured serializers.
 
 ## OpenAPI
 
