@@ -16,7 +16,7 @@ It provides common Minimal API endpoint conventions, API versioning, OpenAPI set
 
 - `AddHttp` registers the default HTTP presentation services.
 - `UseHttp` adds the default middleware pipeline and maps source-generated endpoint registrations.
-- JSON numeric values use strict number handling.
+- HTTP JSON contracts enforce required constructor parameters, nullable annotations, and strict number handling.
 - Module assemblies can be mapped to separate OpenAPI documents and Scalar sources for each API version through the `HttpModules` configuration section.
 - Health checks are registered by `AddHttp` and exposed at `/health` by `UseHttp`.
 - `IEndpointGroup` defines route, resource name, and API version metadata for Minimal API endpoint groups.
@@ -38,7 +38,7 @@ Reference the package in each endpoint project with its analyzer assets enabled.
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="PANiXiDA.Core.Presentation.Http" Version="3.0.0" />
+  <PackageReference Include="PANiXiDA.Core.Presentation.Http" Version="4.0.0" />
 </ItemGroup>
 ```
 
@@ -256,9 +256,34 @@ Validation error fields are used as `ValidationProblem` keys. If a validation er
 
 ## JSON
 
-`AddHttp` configures strict JSON number handling. Numeric properties in JSON request bodies must be encoded as JSON numbers rather than quoted strings. This also keeps numeric OpenAPI schemas typed as `integer` or `number` instead of an `integer | string` or `number | string` union.
+`AddHttp` unconditionally configures these HTTP JSON serializer settings in both registration overloads:
 
-String properties and enums configured for string serialization are unaffected.
+- `NumberHandling = JsonNumberHandling.Strict`;
+- `RespectRequiredConstructorParameters = true`;
+- `RespectNullableAnnotations = true`.
+
+JSON request bodies must include every constructor parameter without a default value. Missing parameters produce HTTP `400`, including nullable constructor parameters. Explicit `null` values are rejected for non-nullable reference properties and constructor parameters.
+
+Declare optional constructor parameters with explicit defaults:
+
+```csharp
+public sealed record CreateRequest(
+    string Name,
+    string? RequiredNote,
+    int? Shots = null);
+```
+
+For this contract, `name` and `requiredNote` must be present. `name` must not be `null`, while `requiredNote` may explicitly be `null`. `shots` may be omitted or set to `null`. For property-based DTOs, use C# `required` or `[JsonRequired]` when a property must be present; nullability annotations alone do not require its presence.
+
+The nullable setting also checks JSON response serialization. Returning `null` in a non-nullable reference property causes serialization to fail. It does not enforce nullability of top-level types, generic members, or collection elements; application validation remains responsible for those constraints and business rules.
+
+Numeric properties in JSON request bodies must be encoded as JSON numbers rather than quoted strings. Numeric OpenAPI schemas remain typed as `integer` or `number`. String enum representation is preserved.
+
+These settings apply to ASP.NET Core HTTP JSON options used by Minimal APIs. Form/query binding and separately configured serializers are unaffected.
+
+### Migrating from 3.x
+
+Version 4.0 makes strict JSON contracts mandatory through `AddHttp`, without a package-specific opt-in or configuration switch. Before upgrading, add defaults to constructor parameters whose JSON fields may be omitted and correct non-nullable response properties that can actually contain `null`. Clients must send all required fields, including explicit `null` for required nullable fields. Requests previously accepted through implicit `null` or zero constructor defaults may now return HTTP `400`.
 
 ## OpenAPI
 
