@@ -256,15 +256,9 @@ Validation error fields are used as `ValidationProblem` keys. If a validation er
 
 ## JSON
 
-`AddHttp` unconditionally configures these HTTP JSON serializer settings in both registration overloads:
+`AddHttp` enables `RespectRequiredConstructorParameters`, `RespectNullableAnnotations`, and strict number handling for Minimal API JSON requests and responses. Missing constructor parameters without defaults and explicit `null` for non-nullable reference properties or parameters produce HTTP `400`.
 
-- `NumberHandling = JsonNumberHandling.Strict`;
-- `RespectRequiredConstructorParameters = true`;
-- `RespectNullableAnnotations = true`.
-
-JSON request bodies must include every constructor parameter without a default value. Missing parameters produce HTTP `400`, including nullable constructor parameters. Explicit `null` values are rejected for non-nullable reference properties and constructor parameters.
-
-Declare optional constructor parameters with explicit defaults:
+Use defaults for optional constructor parameters:
 
 ```csharp
 public sealed record CreateRequest(
@@ -273,17 +267,9 @@ public sealed record CreateRequest(
     int? Shots = null);
 ```
 
-For this contract, `name` and `requiredNote` must be present. `name` must not be `null`, while `requiredNote` may explicitly be `null`. `shots` may be omitted or set to `null`. For property-based DTOs, use C# `required` or `[JsonRequired]` when a property must be present; nullability annotations alone do not require its presence.
+`name` and `requiredNote` must be present. `name` must not be `null`; `requiredNote` may be `null`. `shots` may be omitted or set to `null`. For property-based DTOs, use `required` or `[JsonRequired]` to require presence.
 
-The nullable setting also checks JSON response serialization. Returning `null` in a non-nullable reference property causes serialization to fail. It does not enforce nullability of top-level types, generic members, or collection elements; application validation remains responsible for those constraints and business rules.
-
-Numeric properties in JSON request bodies must be encoded as JSON numbers rather than quoted strings. Numeric OpenAPI schemas remain typed as `integer` or `number`. String enum representation is preserved.
-
-These settings apply to ASP.NET Core HTTP JSON options used by Minimal APIs. Form/query binding and separately configured serializers are unaffected.
-
-### Migrating from 3.x
-
-Version 4.0 makes strict JSON contracts mandatory through `AddHttp`, without a package-specific opt-in or configuration switch. Before upgrading, add defaults to constructor parameters whose JSON fields may be omitted and correct non-nullable response properties that can actually contain `null`. Clients must send all required fields, including explicit `null` for required nullable fields. Requests previously accepted through implicit `null` or zero constructor defaults may now return HTTP `400`.
+Non-nullable reference properties in responses must contain non-null values. Validate collection elements, generic members, and business rules separately. Send numbers as JSON numbers; enums use strings. These settings do not affect form/query binding or separately configured serializers.
 
 ## OpenAPI
 
