@@ -1,6 +1,7 @@
 using Asp.Versioning;
 using Asp.Versioning.ApiExplorer;
 
+using Microsoft.AspNetCore.Authentication.BearerToken;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
@@ -109,7 +110,7 @@ public sealed class OpenApiConfigurationTests
         content.ShouldContain("<title>Orders API Reference</title>");
     }
 
-    [Theory(DisplayName = "OpenAPI configuration serves the configured host favicon without bypassing middleware")]
+    [Theory(DisplayName = "OpenAPI configuration short-circuits favicon requests after routing")]
     [InlineData(false, false)]
     [InlineData(true, false)]
     [InlineData(false, true)]
@@ -128,6 +129,12 @@ public sealed class OpenApiConfigurationTests
             {
                 application.Use(async (context, next) =>
                 {
+                    context.Response.Headers["X-Before-Routing"] = "executed";
+                    await next(context);
+                });
+                application.UseRouting();
+                application.Use(async (context, next) =>
+                {
                     context.Response.Headers["X-Test-Middleware"] = "executed";
                     await next(context);
                 });
@@ -141,6 +148,7 @@ public sealed class OpenApiConfigurationTests
         using var client = CreateClient(app);
 
         var scalarContent = await client.GetStringAsync("/scalar", TestContext.Current.CancellationToken);
+        using var healthResponse = await client.GetAsync("/health", TestContext.Current.CancellationToken);
         using var response = await client.GetAsync("/favicon.svg", TestContext.Current.CancellationToken);
         var favicon = await response.Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken);
         favicon.ShouldNotBeEmpty();
@@ -152,8 +160,60 @@ public sealed class OpenApiConfigurationTests
         scalarContent.ShouldContain("\"favicon\":\"/favicon.svg\"");
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         response.Content.Headers.ContentType?.MediaType.ShouldBe("image/svg+xml");
-        response.Headers.GetValues("X-Test-Middleware").ShouldBe(["executed"]);
+        response.Headers.GetValues("X-Before-Routing").ShouldBe(["executed"]);
+        response.Headers.Contains("X-Test-Middleware").ShouldBeFalse();
         favicon.ShouldBe(expectedContent.ToArray());
+        healthResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        healthResponse.Headers.GetValues("X-Test-Middleware").ShouldBe(["executed"]);
+    }
+
+    [Fact(DisplayName = "Short-circuited assets preserve host HTTPS and HSTS middleware and API authorization")]
+    public async Task UseOpenApiConfiguration_ShouldPreserveHostMiddlewareAndApiAuthorization()
+    {
+        await using var app = await CreateStartedApplicationAsync(
+            new Dictionary<string, string?>
+            {
+                [nameof(ScalarConfiguration) + ":" + nameof(ScalarConfiguration.Favicon)] = "/favicon.svg"
+            },
+            TestContext.Current.CancellationToken,
+            configureApplication: application =>
+            {
+                application.UseForwardedHeaders();
+                application.UseHsts();
+                application.UseHttpsRedirection();
+                application.UseRouting();
+                application.UseAuthentication();
+                application.UseAuthorization();
+                application.MapGet("/protected", static () => TypedResults.Ok()).RequireAuthorization();
+            },
+            configureBuilder: builder =>
+            {
+                builder.Services.AddHttpsRedirection(options => options.HttpsPort = 8443);
+                builder.Services.AddAuthentication(BearerTokenDefaults.AuthenticationScheme).AddBearerToken();
+                builder.Services.AddAuthorization();
+            });
+        using var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, UseProxy = false })
+        {
+            BaseAddress = new Uri(app.Urls.Single())
+        };
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Get, "/favicon.svg");
+        httpRequest.Headers.Host = "assets.example";
+        using var httpsRequest = new HttpRequestMessage(HttpMethod.Get, "/favicon.svg");
+        httpsRequest.Headers.Host = "assets.example";
+        httpsRequest.Headers.Add("X-Forwarded-Proto", "https");
+        using var protectedRequest = new HttpRequestMessage(HttpMethod.Get, "/protected");
+        protectedRequest.Headers.Add("X-Forwarded-Proto", "https");
+
+        using var httpResponse = await client.SendAsync(httpRequest, TestContext.Current.CancellationToken);
+        using var httpsResponse = await client.SendAsync(httpsRequest, TestContext.Current.CancellationToken);
+        using var protectedResponse = await client.SendAsync(protectedRequest, TestContext.Current.CancellationToken);
+
+        httpResponse.StatusCode.ShouldBe(HttpStatusCode.TemporaryRedirect);
+        httpResponse.Headers.Location.ShouldBe(new Uri("https://assets.example:8443/favicon.svg"));
+        httpsResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        httpsResponse.Headers.Contains("Strict-Transport-Security").ShouldBeTrue();
+        (await httpsResponse.Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken)).ShouldNotBeEmpty();
+        protectedResponse.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
     [Theory(DisplayName = "OpenAPI configuration keeps the default favicon and does not map assets for a blank favicon")]
@@ -663,7 +723,8 @@ public sealed class OpenApiConfigurationTests
         Dictionary<string, string?> configurationValues,
         CancellationToken cancellationToken,
         Action<WebApplication>? configureApplication = null,
-        bool useSlimBuilder = false)
+        bool useSlimBuilder = false,
+        Action<WebApplicationBuilder>? configureBuilder = null)
     {
         var options = new WebApplicationOptions
         {
@@ -682,6 +743,7 @@ public sealed class OpenApiConfigurationTests
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         builder.Configuration.AddInMemoryCollection(configurationValues);
         builder.Services.AddHttp(builder.Configuration);
+        configureBuilder?.Invoke(builder);
 
         var app = builder.Build();
         configureApplication?.Invoke(app);

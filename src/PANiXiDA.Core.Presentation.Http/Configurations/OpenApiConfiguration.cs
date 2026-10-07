@@ -74,7 +74,7 @@ internal static class OpenApiConfiguration
             var scalarFavicon = scalarConfiguration.Favicon;
             if (!string.IsNullOrWhiteSpace(scalarFavicon))
             {
-                app.MapStaticAssets();
+                app.MapStaticAssets().ShortCircuit();
             }
 
             app.MapOpenApi()
