@@ -110,9 +110,13 @@ public sealed class OpenApiConfigurationTests
     }
 
     [Theory(DisplayName = "OpenAPI configuration serves the configured host favicon without bypassing middleware")]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task UseOpenApiConfiguration_ShouldServeConfiguredHostFavicon(bool mapStaticAssetsExplicitly)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task UseOpenApiConfiguration_ShouldServeConfiguredHostFavicon(
+        bool mapStaticAssetsExplicitly,
+        bool useSlimBuilder)
     {
         await using var app = await CreateStartedApplicationAsync(
             new Dictionary<string, string?>
@@ -132,12 +136,14 @@ public sealed class OpenApiConfigurationTests
                 {
                     application.MapStaticAssets();
                 }
-            });
+            },
+            useSlimBuilder: useSlimBuilder);
         using var client = CreateClient(app);
 
         var scalarContent = await client.GetStringAsync("/scalar", TestContext.Current.CancellationToken);
         using var response = await client.GetAsync("/favicon.svg", TestContext.Current.CancellationToken);
         var favicon = await response.Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken);
+        favicon.ShouldNotBeEmpty();
         await using var expectedStream = app.Environment.WebRootFileProvider.GetFileInfo("favicon.svg")
             .CreateReadStream();
         using var expectedContent = new MemoryStream();
@@ -656,13 +662,22 @@ public sealed class OpenApiConfigurationTests
     private static async Task<WebApplication> CreateStartedApplicationAsync(
         Dictionary<string, string?> configurationValues,
         CancellationToken cancellationToken,
-        Action<WebApplication>? configureApplication = null)
+        Action<WebApplication>? configureApplication = null,
+        bool useSlimBuilder = false)
     {
-        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        var options = new WebApplicationOptions
         {
             EnvironmentName = Environments.Development,
             ApplicationName = typeof(OpenApiConfigurationTests).Assembly.GetName().Name
-        });
+        };
+        var builder = useSlimBuilder
+            ? WebApplication.CreateSlimBuilder(options)
+            : WebApplication.CreateBuilder(options);
+
+        if (useSlimBuilder)
+        {
+            builder.WebHost.UseStaticWebAssets();
+        }
 
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         builder.Configuration.AddInMemoryCollection(configurationValues);
