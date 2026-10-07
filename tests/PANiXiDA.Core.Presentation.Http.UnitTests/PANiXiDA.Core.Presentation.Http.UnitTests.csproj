@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk.Web">
     <PropertyGroup>
         <OutputType>Exe</OutputType>
         <TestingPlatformCommandLineArguments>$(TestingPlatformCommandLineArguments) --coverage-settings "$(MSBuildProjectDirectory)/CodeCoverage.config.xml"</TestingPlatformCommandLineArguments>
@@ -19,6 +19,7 @@
     </ItemGroup>
 
     <ItemGroup>
+        <Using Remove="Microsoft.AspNetCore.*;Microsoft.Extensions.*;System.Net.Http.Json" />
         <Using Include="Xunit" />
         <Using Include="Shouldly" />
     </ItemGroup>
