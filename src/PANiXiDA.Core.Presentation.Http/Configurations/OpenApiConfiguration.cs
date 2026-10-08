@@ -71,6 +71,12 @@ internal static class OpenApiConfiguration
                 .GetRequiredService<IOptions<ScalarConfiguration>>()
                 .Value;
             var scalarTitle = scalarConfiguration.Title;
+            var scalarFavicon = scalarConfiguration.Favicon;
+            if (!string.IsNullOrWhiteSpace(scalarFavicon))
+            {
+                app.MapStaticAssets().ShortCircuit();
+            }
+
             app.MapOpenApi()
                 .WithDocumentPerVersion();
             app.MapScalarApiReference(options =>
@@ -78,6 +84,11 @@ internal static class OpenApiConfiguration
                 if (!string.IsNullOrWhiteSpace(scalarTitle))
                 {
                     options.WithTitle(scalarTitle);
+                }
+
+                if (!string.IsNullOrWhiteSpace(scalarFavicon))
+                {
+                    options.WithFavicon(scalarFavicon);
                 }
 
                 var documents = app.Services.GetRequiredService<HttpModuleApiVersionDescriptionProvider>();

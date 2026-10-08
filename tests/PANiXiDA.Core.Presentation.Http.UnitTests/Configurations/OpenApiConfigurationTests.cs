@@ -1,6 +1,7 @@
 using Asp.Versioning;
 using Asp.Versioning.ApiExplorer;
 
+using Microsoft.AspNetCore.Authentication.BearerToken;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
@@ -49,14 +50,15 @@ public sealed class OpenApiConfigurationTests
         options.ShouldNotBeNull();
     }
 
-    [Fact(DisplayName = "OpenAPI configuration binds Scalar API reference title")]
-    public void AddOpenApiConfiguration_ShouldBindScalarApiReferenceTitle()
+    [Fact(DisplayName = "OpenAPI configuration binds Scalar API reference title and favicon")]
+    public void AddOpenApiConfiguration_ShouldBindScalarApiReferenceTitleAndFavicon()
     {
         var services = new ServiceCollection();
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                [nameof(ScalarConfiguration) + ":" + nameof(ScalarConfiguration.Title)] = "Orders API Reference"
+                [nameof(ScalarConfiguration) + ":" + nameof(ScalarConfiguration.Title)] = "Orders API Reference",
+                [nameof(ScalarConfiguration) + ":" + nameof(ScalarConfiguration.Favicon)] = "/favicon.svg"
             })
             .Build();
 
@@ -66,6 +68,7 @@ public sealed class OpenApiConfigurationTests
         var options = serviceProvider.GetRequiredService<IOptions<ScalarConfiguration>>().Value;
 
         options.Title.ShouldBe("Orders API Reference");
+        options.Favicon.ShouldBe("/favicon.svg");
     }
 
     [Fact(DisplayName = "OpenAPI configuration maps the specification and Scalar endpoints in Development")]
@@ -105,6 +108,134 @@ public sealed class OpenApiConfigurationTests
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         content.ShouldContain("<title>Orders API Reference</title>");
+    }
+
+    [Theory(DisplayName = "OpenAPI configuration short-circuits favicon requests after routing")]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task UseOpenApiConfiguration_ShouldServeConfiguredHostFavicon(
+        bool mapStaticAssetsExplicitly,
+        bool useSlimBuilder)
+    {
+        await using var app = await CreateStartedApplicationAsync(
+            new Dictionary<string, string?>
+            {
+                [nameof(ScalarConfiguration) + ":" + nameof(ScalarConfiguration.Favicon)] = "/favicon.svg"
+            },
+            TestContext.Current.CancellationToken,
+            configureApplication: application =>
+            {
+                application.Use(async (context, next) =>
+                {
+                    context.Response.Headers["X-Before-Routing"] = "executed";
+                    await next(context);
+                });
+                application.UseRouting();
+                application.Use(async (context, next) =>
+                {
+                    context.Response.Headers["X-Test-Middleware"] = "executed";
+                    await next(context);
+                });
+
+                if (mapStaticAssetsExplicitly)
+                {
+                    application.MapStaticAssets();
+                }
+            },
+            useSlimBuilder: useSlimBuilder);
+        using var client = CreateClient(app);
+
+        var scalarContent = await client.GetStringAsync("/scalar", TestContext.Current.CancellationToken);
+        using var healthResponse = await client.GetAsync("/health", TestContext.Current.CancellationToken);
+        using var response = await client.GetAsync("/favicon.svg", TestContext.Current.CancellationToken);
+        var favicon = await response.Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken);
+        favicon.ShouldNotBeEmpty();
+        await using var expectedStream = app.Environment.WebRootFileProvider.GetFileInfo("favicon.svg")
+            .CreateReadStream();
+        using var expectedContent = new MemoryStream();
+        await expectedStream.CopyToAsync(expectedContent, TestContext.Current.CancellationToken);
+
+        scalarContent.ShouldContain("\"favicon\":\"/favicon.svg\"");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("image/svg+xml");
+        response.Headers.GetValues("X-Before-Routing").ShouldBe(["executed"]);
+        response.Headers.Contains("X-Test-Middleware").ShouldBeFalse();
+        favicon.ShouldBe(expectedContent.ToArray());
+        healthResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        healthResponse.Headers.GetValues("X-Test-Middleware").ShouldBe(["executed"]);
+    }
+
+    [Fact(DisplayName = "Short-circuited assets preserve host HTTPS and HSTS middleware and API authorization")]
+    public async Task UseOpenApiConfiguration_ShouldPreserveHostMiddlewareAndApiAuthorization()
+    {
+        await using var app = await CreateStartedApplicationAsync(
+            new Dictionary<string, string?>
+            {
+                [nameof(ScalarConfiguration) + ":" + nameof(ScalarConfiguration.Favicon)] = "/favicon.svg"
+            },
+            TestContext.Current.CancellationToken,
+            configureApplication: application =>
+            {
+                application.UseForwardedHeaders();
+                application.UseHsts();
+                application.UseHttpsRedirection();
+                application.UseRouting();
+                application.UseAuthentication();
+                application.UseAuthorization();
+                application.MapGet("/protected", static () => TypedResults.Ok()).RequireAuthorization();
+            },
+            configureBuilder: builder =>
+            {
+                builder.Services.AddHttpsRedirection(options => options.HttpsPort = 8443);
+                builder.Services.AddAuthentication(BearerTokenDefaults.AuthenticationScheme).AddBearerToken();
+                builder.Services.AddAuthorization();
+            });
+        using var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, UseProxy = false })
+        {
+            BaseAddress = new Uri(app.Urls.Single())
+        };
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Get, "/favicon.svg");
+        httpRequest.Headers.Host = "assets.example";
+        using var httpsRequest = new HttpRequestMessage(HttpMethod.Get, "/favicon.svg");
+        httpsRequest.Headers.Host = "assets.example";
+        httpsRequest.Headers.Add("X-Forwarded-Proto", "https");
+        using var protectedRequest = new HttpRequestMessage(HttpMethod.Get, "/protected");
+        protectedRequest.Headers.Add("X-Forwarded-Proto", "https");
+
+        using var httpResponse = await client.SendAsync(httpRequest, TestContext.Current.CancellationToken);
+        using var httpsResponse = await client.SendAsync(httpsRequest, TestContext.Current.CancellationToken);
+        using var protectedResponse = await client.SendAsync(protectedRequest, TestContext.Current.CancellationToken);
+
+        httpResponse.StatusCode.ShouldBe(HttpStatusCode.TemporaryRedirect);
+        httpResponse.Headers.Location.ShouldBe(new Uri("https://assets.example:8443/favicon.svg"));
+        httpsResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        httpsResponse.Headers.Contains("Strict-Transport-Security").ShouldBeTrue();
+        (await httpsResponse.Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken)).ShouldNotBeEmpty();
+        protectedResponse.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Theory(DisplayName = "OpenAPI configuration keeps the default favicon and does not map assets for a blank favicon")]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" \t\r\n")]
+    public async Task UseOpenApiConfiguration_ShouldIgnoreBlankFavicon(string? favicon)
+    {
+        await using var app = await CreateStartedApplicationAsync(
+            new Dictionary<string, string?>
+            {
+                [nameof(ScalarConfiguration) + ":" + nameof(ScalarConfiguration.Favicon)] = favicon
+            },
+            TestContext.Current.CancellationToken);
+        using var client = CreateClient(app);
+
+        var scalarContent = await client.GetStringAsync("/scalar", TestContext.Current.CancellationToken);
+        using var response = await client.GetAsync("/favicon.svg", TestContext.Current.CancellationToken);
+
+        scalarContent.ShouldContain("favicon.svg");
+        scalarContent.ShouldNotContain("\"favicon\":\"/favicon.svg\"");
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Theory(DisplayName = "OpenAPI configuration emits strict numeric schemas")]
@@ -552,14 +683,20 @@ public sealed class OpenApiConfigurationTests
         paths.TryGetProperty(excludedPath, out _).ShouldBeFalse();
     }
 
-    [Fact(DisplayName = "OpenAPI configuration does not map the specification or Scalar endpoints outside Development")]
-    public void UseOpenApiConfiguration_ShouldNotMapOpenApiOrScalarEndpointsOutsideDevelopment()
+    [Theory(DisplayName = "OpenAPI configuration does not map OpenAPI, Scalar, or favicon assets outside Development")]
+    [InlineData("Production")]
+    [InlineData("Staging")]
+    public void UseOpenApiConfiguration_ShouldNotMapOpenApiOrScalarEndpointsOutsideDevelopment(string environmentName)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
-            EnvironmentName = Environments.Production
+            EnvironmentName = environmentName
         });
 
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            [nameof(ScalarConfiguration) + ":" + nameof(ScalarConfiguration.Favicon)] = "/favicon.svg"
+        });
         builder.Services.AddOpenApiConfiguration(builder.Configuration, []);
 
         using var app = builder.Build();
@@ -571,6 +708,7 @@ public sealed class OpenApiConfigurationTests
 
         routePatterns.ShouldNotContain("/openapi/{documentName}.json");
         routePatterns.ShouldNotContain("/scalar/{documentName?}");
+        routePatterns.ShouldNotContain("favicon.svg");
     }
 
     private static List<string?> GetRoutePatterns(WebApplication app)
@@ -583,19 +721,33 @@ public sealed class OpenApiConfigurationTests
 
     private static async Task<WebApplication> CreateStartedApplicationAsync(
         Dictionary<string, string?> configurationValues,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<WebApplication>? configureApplication = null,
+        bool useSlimBuilder = false,
+        Action<WebApplicationBuilder>? configureBuilder = null)
     {
-        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        var options = new WebApplicationOptions
         {
-            EnvironmentName = Environments.Development
-        });
+            EnvironmentName = Environments.Development,
+            ApplicationName = typeof(OpenApiConfigurationTests).Assembly.GetName().Name
+        };
+        var builder = useSlimBuilder
+            ? WebApplication.CreateSlimBuilder(options)
+            : WebApplication.CreateBuilder(options);
+
+        if (useSlimBuilder)
+        {
+            builder.WebHost.UseStaticWebAssets();
+        }
 
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         builder.Configuration.AddInMemoryCollection(configurationValues);
-        builder.Services.AddOpenApiConfiguration(builder.Configuration, []);
+        builder.Services.AddHttp(builder.Configuration);
+        configureBuilder?.Invoke(builder);
 
         var app = builder.Build();
-        app.UseOpenApiConfiguration();
+        configureApplication?.Invoke(app);
+        app.UseHttp();
 
         await app.StartAsync(cancellationToken);
 
