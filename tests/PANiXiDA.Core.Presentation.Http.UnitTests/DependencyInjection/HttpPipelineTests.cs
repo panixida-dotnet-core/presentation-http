@@ -93,8 +93,8 @@ public sealed class HttpPipelineTests
 
         await using var app = builder.Build();
         app.UseHttp();
-        app.MapGet("/orders/{id}", (HttpContext context) => TypedResults.Text(
-                context.User.FindFirstValue(ClaimTypes.NameIdentifier)!))
+        app.MapGet("/orders/{id}", (int id, HttpContext context) => TypedResults.Text(
+                $"{id}:{context.User.FindFirstValue(ClaimTypes.NameIdentifier)}"))
             .WithDisplayName("Read order")
             .RequireAuthorization("ReadOrders");
         await app.StartAsync(TestContext.Current.CancellationToken);
@@ -109,7 +109,7 @@ public sealed class HttpPipelineTests
         response.StatusCode.ShouldBe(expectedStatus);
         if (expectedStatus == HttpStatusCode.OK)
         {
-            (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).ShouldBe("user-id");
+            (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).ShouldBe("42:user-id");
             logger.Entries.ShouldHaveSingleItem();
             var scope = logger.Scopes.OfType<IReadOnlyDictionary<string, object?>>()
                 .Single(values => values.ContainsKey("http.route"));

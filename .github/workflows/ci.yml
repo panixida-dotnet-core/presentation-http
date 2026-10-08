@@ -32,37 +32,6 @@ jobs:
           registry-user: ${{ secrets.REGISTRY_USER }}
           registry-token: ${{ secrets.REGISTRY_TOKEN }}
 
-    sonar-diagnostics:
-        if: ${{ failure() }}
-        needs: sonar
-        runs-on: ubuntu-latest
-        steps:
-            - name: Read failed quality gate
-              env:
-                  SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
-                  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-                  SONAR_PROJECT_KEY: ${{ vars.SONAR_PROJECT_KEY }}
-              run: |
-                  python3 - <<'PY'
-                  import base64, json, os, urllib.parse, urllib.request
-                  host = os.environ['SONAR_HOST_URL'].rstrip('/')
-                  key = os.environ['SONAR_PROJECT_KEY']
-                  auth = base64.b64encode((os.environ['SONAR_TOKEN'] + ':').encode()).decode()
-                  queries = [
-                      ('qualitygates/project_status', {'projectKey': key}),
-                      ('issues/search', {'componentKeys': key, 'resolved': 'false', 'ps': '100'}),
-                  ]
-                  for endpoint, params in queries:
-                      request = urllib.request.Request(host + '/api/' + endpoint + '?' + urllib.parse.urlencode(params), headers={'Authorization': 'Basic ' + auth})
-                      with urllib.request.urlopen(request) as response:
-                          data = json.load(response)
-                      if endpoint.startswith('qualitygates'):
-                          print(json.dumps(data['projectStatus']))
-                      else:
-                          for issue in data['issues']:
-                              print(json.dumps({field: issue.get(field) for field in ['rule', 'component', 'line', 'message']}))
-                  PY
-
     publish:
       if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       needs: 
