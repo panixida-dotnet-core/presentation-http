@@ -18,13 +18,13 @@ namespace PANiXiDA.Core.Presentation.Http.UnitTests.DependencyInjection;
 
 public sealed class RequestCompletionLoggingTests
 {
-    [Theory(DisplayName = "UseHttp logs the final response status after exception handling")]
+    [Theory(DisplayName = "UseHttp preserves the request scope in handler logs and logs the final response status")]
     [InlineData(true, ExceptionKind.Cancellation, StatusCodes.Status499ClientClosedRequest, LogLevel.Information)]
     [InlineData(false, ExceptionKind.Cancellation, StatusCodes.Status500InternalServerError, LogLevel.Error)]
     [InlineData(true, ExceptionKind.ApplicationFailure, StatusCodes.Status500InternalServerError, LogLevel.Error)]
     [InlineData(false, ExceptionKind.ApplicationFailure, StatusCodes.Status500InternalServerError, LogLevel.Error)]
     [InlineData(false, ExceptionKind.BadRequest, StatusCodes.Status400BadRequest, LogLevel.Warning)]
-    public async Task UseHttp_ShouldLogFinalResponseStatus(
+    public async Task UseHttp_ShouldPreserveRequestScopeAndLogFinalResponseStatus(
         bool requestAborted,
         ExceptionKind exceptionKind,
         int expectedStatus,
@@ -75,6 +75,15 @@ public sealed class RequestCompletionLoggingTests
         completion.Attributes.Single(pair => pair.Key == "http.response.status_code").Value.ShouldBe(expectedStatus);
         var records = provider.Records.Where(record => record.Category.StartsWith("PANiXiDA.Core.Presentation.Http.", StringComparison.Ordinal)).ToArray();
         records.Length.ShouldBe(expectedStatus == StatusCodes.Status499ClientClosedRequest ? 1 : 2);
+        if (expectedStatus != StatusCodes.Status499ClientClosedRequest)
+        {
+            var handlerCategory = exceptionKind == ExceptionKind.BadRequest
+                ? typeof(BadHttpRequestExceptionHandler).FullName
+                : typeof(ExceptionHandler).FullName;
+            var handlerLog = records.Single(record => record.Category == handlerCategory);
+            handlerLog.Level.ShouldBe(expectedLevel);
+        }
+
         foreach (var record in records)
         {
             record.Attributes.Single(pair => pair.Key == "network.protocol.name").Value.ShouldBe("http");

@@ -67,8 +67,6 @@ public sealed class BadHttpRequestExceptionHandlerTests
         logEntry.Exception.ShouldBeSameAs(exception);
         logEntry.Message.ShouldBe("Invalid HTTP request");
 
-        // This logger records scopes created by the handler, not inherited scopes.
-        // RequestCompletionLoggingTests verifies the effective request fields in the HTTP pipeline.
         logger.Scopes.ShouldBeEmpty();
     }
 
