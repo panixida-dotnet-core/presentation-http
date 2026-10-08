@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 using PANiXiDA.Core.Presentation.Http.Configurations;
 using PANiXiDA.Core.Presentation.Http.Endpoints;
@@ -94,17 +95,18 @@ public static class ServiceCollectionExtensions
         app.UseRouting();
 
         var serviceProviderIsService = app.Services.GetService<IServiceProviderIsService>();
-        if (serviceProviderIsService?.IsService(typeof(ICorsService)) is true)
+        if (IsServiceRegistered<ICorsService>(app.Services, serviceProviderIsService))
         {
-            app.UseCors();
+            var corsOptions = app.Services.GetRequiredService<IOptions<CorsOptions>>();
+            app.UseCors(corsOptions.Value.DefaultPolicyName);
         }
 
-        if (serviceProviderIsService?.IsService(typeof(IAuthenticationSchemeProvider)) is true)
+        if (IsServiceRegistered<IAuthenticationSchemeProvider>(app.Services, serviceProviderIsService))
         {
             app.UseAuthentication();
         }
 
-        if (serviceProviderIsService?.IsService(typeof(IAuthorizationHandlerProvider)) is true)
+        if (IsServiceRegistered<IAuthorizationHandlerProvider>(app.Services, serviceProviderIsService))
         {
             app.UseAuthorization();
         }
@@ -135,5 +137,19 @@ public static class ServiceCollectionExtensions
         }
 
         return app;
+    }
+
+    private static bool IsServiceRegistered<TService>(
+        IServiceProvider services,
+        IServiceProviderIsService? serviceProviderIsService)
+        where TService : class
+    {
+        if (serviceProviderIsService is not null)
+        {
+            return serviceProviderIsService.IsService(typeof(TService));
+        }
+
+        using var scope = services.CreateScope();
+        return scope.ServiceProvider.GetService<TService>() is not null;
     }
 }

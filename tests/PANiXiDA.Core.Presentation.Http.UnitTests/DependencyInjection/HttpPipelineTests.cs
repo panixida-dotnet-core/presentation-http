@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.BearerToken;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization.Infrastructure;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -23,8 +25,7 @@ public sealed class HttpPipelineTests
     [Fact(DisplayName = "UseHttp supports a service provider without service registration introspection")]
     public async Task UseHttp_ShouldSupportServiceProviderWithoutIntrospection()
     {
-        var builder = CreateBuilder();
-        builder.Host.UseServiceProviderFactory(new ServiceProviderWithoutIntrospectionFactory());
+        var builder = CreateBuilder(supportsIntrospection: false);
 
         await using var app = builder.Build();
         app.UseHttp();
@@ -38,15 +39,20 @@ public sealed class HttpPipelineTests
     }
 
     [Theory(DisplayName = "UseHttp supports independently registered authentication and authorization services")]
-    [InlineData(false, false)]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    [InlineData(true, true)]
+    [InlineData(false, false, true)]
+    [InlineData(true, false, true)]
+    [InlineData(false, true, true)]
+    [InlineData(true, true, true)]
+    [InlineData(false, false, false)]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, true, false)]
     public async Task UseHttp_ShouldSupportOptionalAuthenticationAndAuthorization(
         bool registerAuthentication,
-        bool registerAuthorization)
+        bool registerAuthorization,
+        bool supportsIntrospection)
     {
-        var builder = CreateBuilder();
+        var builder = CreateBuilder(supportsIntrospection);
         if (registerAuthentication)
         {
             builder.Services.AddAuthentication(BearerTokenDefaults.AuthenticationScheme).AddBearerToken();
@@ -145,23 +151,34 @@ public sealed class HttpPipelineTests
     }
 
     [Theory(DisplayName = "UseHttp applies default and endpoint CORS before authorization")]
-    [InlineData(false, false, false, HttpStatusCode.Unauthorized)]
-    [InlineData(false, false, true, HttpStatusCode.Forbidden)]
-    [InlineData(false, true, false, HttpStatusCode.NoContent)]
-    [InlineData(true, false, false, HttpStatusCode.Unauthorized)]
-    [InlineData(true, false, true, HttpStatusCode.Forbidden)]
-    [InlineData(true, true, false, HttpStatusCode.NoContent)]
+    [InlineData(false, false, false, true, HttpStatusCode.Unauthorized)]
+    [InlineData(false, false, true, true, HttpStatusCode.Forbidden)]
+    [InlineData(false, true, false, true, HttpStatusCode.NoContent)]
+    [InlineData(true, false, false, true, HttpStatusCode.Unauthorized)]
+    [InlineData(true, false, true, true, HttpStatusCode.Forbidden)]
+    [InlineData(true, true, false, true, HttpStatusCode.NoContent)]
+    [InlineData(false, false, false, false, HttpStatusCode.Unauthorized)]
+    [InlineData(false, false, true, false, HttpStatusCode.Forbidden)]
+    [InlineData(false, true, false, false, HttpStatusCode.NoContent)]
+    [InlineData(true, false, false, false, HttpStatusCode.Unauthorized)]
+    [InlineData(true, false, true, false, HttpStatusCode.Forbidden)]
+    [InlineData(true, true, false, false, HttpStatusCode.NoContent)]
     public async Task UseHttp_ShouldApplyCorsBeforeAuthorization(
         bool useDefaultPolicy,
         bool preflight,
         bool authenticated,
+        bool supportsIntrospection,
         HttpStatusCode expectedStatus)
     {
         const string origin = "https://admin.example";
-        var builder = CreateBuilder();
-        builder.Services.AddCors(options => options.AddPolicy(
-            useDefaultPolicy ? options.DefaultPolicyName : "Browser",
-            policy => policy.WithOrigins(origin).AllowAnyHeader().AllowAnyMethod()));
+        var builder = CreateBuilder(supportsIntrospection);
+        builder.Services.AddCors(options =>
+        {
+            options.DefaultPolicyName = "DefaultBrowser";
+            options.AddPolicy(
+                useDefaultPolicy ? options.DefaultPolicyName : "Browser",
+                policy => policy.WithOrigins(origin).AllowAnyHeader().AllowAnyMethod());
+        });
         builder.Services.AddAuthentication(BearerTokenDefaults.AuthenticationScheme).AddBearerToken();
         builder.Services.AddAuthorizationBuilder().AddPolicy("Admin", policy => policy.RequireRole("Admin"));
 
@@ -200,11 +217,13 @@ public sealed class HttpPipelineTests
     }
 
     [Theory(DisplayName = "UseHttp does not emit CORS headers without a configured policy")]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task UseHttp_ShouldNotEnableCorsWithoutPolicy(bool registerCors)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task UseHttp_ShouldNotEnableCorsWithoutPolicy(bool registerCors, bool supportsIntrospection)
     {
-        var builder = CreateBuilder();
+        var builder = CreateBuilder(supportsIntrospection);
         if (registerCors)
         {
             builder.Services.AddCors();
@@ -223,7 +242,44 @@ public sealed class HttpPipelineTests
         response.Headers.Contains("Access-Control-Allow-Origin").ShouldBeFalse();
     }
 
-    private static WebApplicationBuilder CreateBuilder()
+    [Theory(DisplayName = "UseHttp enforces fallback authorization and allows anonymous endpoints with either service provider")]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task UseHttp_ShouldEnforceFallbackAuthorization(bool authenticated, bool supportsIntrospection)
+    {
+        var builder = CreateBuilder(supportsIntrospection);
+        builder.Services.AddAuthentication(BearerTokenDefaults.AuthenticationScheme).AddBearerToken();
+        builder.Services.AddAuthorizationBuilder().SetFallbackPolicy(
+            new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
+        builder.Services.AddScoped<IAuthorizationHandler, PassThroughAuthorizationHandler>();
+
+        await using var app = builder.Build();
+        app.UseHttp();
+        app.MapGet("/protected", (HttpContext context) => TypedResults.Text(
+            context.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "anonymous"));
+        app.MapGet("/public", () => TypedResults.Ok()).AllowAnonymous();
+        await app.StartAsync(TestContext.Current.CancellationToken);
+        using var client = CreateClient(app);
+        if (authenticated)
+        {
+            client.DefaultRequestHeaders.Authorization = CreateAuthorizationHeader(app);
+        }
+
+        using var protectedResponse = await client.GetAsync("/protected", TestContext.Current.CancellationToken);
+        using var publicResponse = await client.GetAsync("/public", TestContext.Current.CancellationToken);
+
+        protectedResponse.StatusCode.ShouldBe(authenticated ? HttpStatusCode.OK : HttpStatusCode.Unauthorized);
+        if (authenticated)
+        {
+            (await protectedResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).ShouldBe("user-id");
+        }
+
+        publicResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    private static WebApplicationBuilder CreateBuilder(bool supportsIntrospection = true)
     {
         var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions
         {
@@ -231,6 +287,11 @@ public sealed class HttpPipelineTests
         });
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         builder.Services.AddHttp(builder.Configuration);
+        if (!supportsIntrospection)
+        {
+            builder.Host.UseServiceProviderFactory(new ServiceProviderWithoutIntrospectionFactory());
+        }
+
         return builder;
     }
 
@@ -265,7 +326,8 @@ public sealed class HttpPipelineTests
 
         public IServiceProvider CreateServiceProvider(IServiceCollection containerBuilder)
         {
-            return new ServiceProviderWithoutIntrospection(containerBuilder.BuildServiceProvider());
+            return new ServiceProviderWithoutIntrospection(containerBuilder.BuildServiceProvider(
+                new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true }));
         }
     }
 

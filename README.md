@@ -63,6 +63,8 @@ Call `AddValidation()` in each endpoint/DTO assembly to generate validation meta
 
 `UseHttp` configures forwarded headers → exception handling → HTTPS redirection → routing → CORS → authentication/authorization → request logging.
 CORS, authentication and authorization middleware are enabled independently when their services are registered. The host configures schemes and policies with `AddCors`, `AddAuthentication` and `AddAuthorization`; CORS uses the default policy or endpoint policies.
+If the DI provider does not expose `IServiceProviderIsService`, `UseHttp` detects these services by resolving them in temporary scopes at startup.
+
 When upgrading to 5.x, remove separate `UseRouting`, `UseCors`, `UseAuthentication`, and `UseAuthorization` calls, along with duplicated forwarded headers, exception handling, and HTTPS redirection calls. Review custom middleware placement around `UseHttp`.
 
 ## Forwarded Headers
