@@ -87,10 +87,26 @@ public static class ServiceCollectionExtensions
         this WebApplication app,
         params Assembly[] assemblies)
     {
+        return app.UseHttp(configureAfterRouting: null, assemblies);
+    }
+
+    /// <summary>
+    /// Adds the HTTP presentation pipeline with optional middleware between routing and authentication/authorization, then maps endpoint groups.
+    /// </summary>
+    /// <param name="app">The ASP.NET Core application instance.</param>
+    /// <param name="configureAfterRouting">Configures middleware such as CORS after routing and before authentication/authorization. Short-circuited assets skip this middleware.</param>
+    /// <param name="assemblies">The assemblies containing generated endpoint registrations.</param>
+    /// <returns>The original application instance for further configuration.</returns>
+    public static WebApplication UseHttp(
+        this WebApplication app,
+        Action<WebApplication>? configureAfterRouting,
+        params Assembly[] assemblies)
+    {
         app.UseForwardedHeadersConfiguration();
         app.UseExceptionHandler();
         app.UseHttpsRedirection();
         app.UseRouting();
+        configureAfterRouting?.Invoke(app);
 
         var serviceProviderIsService = app.Services.GetService<IServiceProviderIsService>();
         if (serviceProviderIsService?.IsService(typeof(IAuthenticationSchemeProvider)) is true)

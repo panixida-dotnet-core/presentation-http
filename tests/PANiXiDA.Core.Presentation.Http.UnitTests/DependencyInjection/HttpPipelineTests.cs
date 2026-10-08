@@ -144,6 +144,51 @@ public sealed class HttpPipelineTests
             .ShouldContain("Internal server error");
     }
 
+    [Theory(DisplayName = "UseHttp supports endpoint CORS for preflight and unauthorized or forbidden responses")]
+    [InlineData(false, false, HttpStatusCode.Unauthorized)]
+    [InlineData(false, true, HttpStatusCode.Forbidden)]
+    [InlineData(true, false, HttpStatusCode.NoContent)]
+    public async Task UseHttp_ShouldApplyEndpointCorsBeforeAuthorization(
+        bool preflight,
+        bool authenticated,
+        HttpStatusCode expectedStatus)
+    {
+        const string origin = "https://admin.example";
+        var builder = CreateBuilder();
+        builder.Services.AddCors(options => options.AddPolicy("Browser", policy =>
+            policy.WithOrigins(origin).AllowAnyHeader().AllowAnyMethod()));
+        builder.Services.AddAuthentication(BearerTokenDefaults.AuthenticationScheme).AddBearerToken();
+        builder.Services.AddAuthorizationBuilder().AddPolicy("Admin", policy => policy.RequireRole("Admin"));
+
+        await using var app = builder.Build();
+        app.UseHttp(pipeline => pipeline.UseCors());
+        app.MapGet("/protected", () => TypedResults.Ok()).RequireAuthorization("Admin").RequireCors("Browser");
+        await app.StartAsync(TestContext.Current.CancellationToken);
+        using var client = CreateClient(app);
+        using var request = new HttpRequestMessage(preflight ? HttpMethod.Options : HttpMethod.Get, "/protected");
+        request.Headers.Add("Origin", origin);
+        if (preflight)
+        {
+            request.Headers.Add("Access-Control-Request-Method", "GET");
+            request.Headers.Add("Access-Control-Request-Headers", "Authorization");
+        }
+
+        if (authenticated)
+        {
+            request.Headers.Authorization = CreateAuthorizationHeader(app);
+        }
+
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(expectedStatus);
+        response.Headers.GetValues("Access-Control-Allow-Origin").ShouldBe([origin]);
+        if (preflight)
+        {
+            response.Headers.GetValues("Access-Control-Allow-Methods").ShouldBe(["GET"]);
+            response.Headers.GetValues("Access-Control-Allow-Headers").ShouldBe(["Authorization"]);
+        }
+    }
+
     private static WebApplicationBuilder CreateBuilder()
     {
         var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions
