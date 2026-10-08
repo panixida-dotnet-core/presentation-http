@@ -20,6 +20,23 @@ namespace PANiXiDA.Core.Presentation.Http.UnitTests.DependencyInjection;
 
 public sealed class HttpPipelineTests
 {
+    [Fact(DisplayName = "UseHttp supports a service provider without service registration introspection")]
+    public async Task UseHttp_ShouldSupportServiceProviderWithoutIntrospection()
+    {
+        var builder = CreateBuilder();
+        builder.Host.UseServiceProviderFactory(new ServiceProviderWithoutIntrospectionFactory());
+
+        await using var app = builder.Build();
+        app.UseHttp();
+        await app.StartAsync(TestContext.Current.CancellationToken);
+        using var client = CreateClient(app);
+
+        using var response = await client.GetAsync("/health", TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).ShouldBe("Healthy");
+    }
+
     [Theory(DisplayName = "UseHttp supports independently registered authentication and authorization services")]
     [InlineData(false, false)]
     [InlineData(true, false)]
@@ -161,5 +178,25 @@ public sealed class HttpPipelineTests
         var options = app.Services.GetRequiredService<IOptionsMonitor<BearerTokenOptions>>()
             .Get(BearerTokenDefaults.AuthenticationScheme);
         return new AuthenticationHeaderValue("Bearer", options.BearerTokenProtector.Protect(ticket));
+    }
+
+    private sealed class ServiceProviderWithoutIntrospectionFactory : IServiceProviderFactory<IServiceCollection>
+    {
+        public IServiceCollection CreateBuilder(IServiceCollection services) => services;
+
+        public IServiceProvider CreateServiceProvider(IServiceCollection containerBuilder)
+        {
+            return new ServiceProviderWithoutIntrospection(containerBuilder.BuildServiceProvider());
+        }
+    }
+
+    private sealed class ServiceProviderWithoutIntrospection(ServiceProvider services) : IServiceProvider, IAsyncDisposable
+    {
+        public object? GetService(Type serviceType)
+        {
+            return serviceType == typeof(IServiceProviderIsService) ? null : services.GetService(serviceType);
+        }
+
+        public ValueTask DisposeAsync() => services.DisposeAsync();
     }
 }
