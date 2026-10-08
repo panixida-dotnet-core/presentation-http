@@ -11,6 +11,7 @@ public sealed class LoggingMiddlewareTests
     [Theory(DisplayName = "InvokeAsync writes the expected log level by response status")]
     [InlineData(StatusCodes.Status204NoContent, LogLevel.Information)]
     [InlineData(StatusCodes.Status404NotFound, LogLevel.Warning)]
+    [InlineData(StatusCodes.Status499ClientClosedRequest, LogLevel.Information)]
     [InlineData(StatusCodes.Status500InternalServerError, LogLevel.Error)]
     public async Task InvokeAsync_ShouldWriteExpectedLogLevelByStatusCode(
         int statusCode,

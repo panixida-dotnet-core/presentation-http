@@ -239,8 +239,12 @@ public static IResult CreateOrder()
 ## HTTP Error Mapping
 
 Invalid HTTP requests represented by `BadHttpRequestException`, including JSON body binding failures, preserve their framework status code and are mapped to `ProblemDetails`.
-Other unhandled exceptions are mapped to status 500 in every environment.
-In `Development`, both responses include the exception message in `detail`.
+ASP.NET Core handles `OperationCanceledException` (including `TaskCanceledException`) and `IOException` as client aborts when `RequestAborted` is canceled, assigning status 499 if the response has not started. Other unhandled exceptions are mapped to status 500 in every environment.
+In `Development`, error `ProblemDetails` responses include the exception message in `detail`.
+
+The request logging middleware wraps exception handling, so `HTTP request finished` records the final handled status instead of the status before exception processing. Status 499 is logged at `Information`; other 4xx responses remain `Warning`, and 5xx responses remain `Error`. The request scope retains the route, endpoint, and user captured when logging begins. Requests handled by HTTPS redirection are also included in completion logging.
+
+This package does not change earlier exception logs from handlers, EF, or messaging libraries. Use the cancellation normalization in `PANiXiDA.Core.Observability` to retain qualifying cancellation errors as informational OTLP records.
 
 | Error type | HTTP status | Title |
 | --- | ---: | --- |
