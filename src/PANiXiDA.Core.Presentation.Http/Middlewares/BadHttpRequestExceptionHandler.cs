@@ -2,15 +2,12 @@ using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 
 using PANiXiDA.Core.Presentation.Http.Errors;
 
 namespace PANiXiDA.Core.Presentation.Http.Middlewares;
 
-internal sealed class BadHttpRequestExceptionHandler(
-    ILogger<BadHttpRequestExceptionHandler> logger,
-    IHostEnvironment hostEnvironment) : IExceptionHandler
+internal sealed class BadHttpRequestExceptionHandler(IHostEnvironment hostEnvironment) : IExceptionHandler
 {
     public async ValueTask<bool> TryHandleAsync(
         HttpContext httpContext,
@@ -21,8 +18,6 @@ internal sealed class BadHttpRequestExceptionHandler(
         {
             return false;
         }
-
-        logger.LogWarning(exception, "Invalid HTTP request");
 
         var statusCode = badHttpRequestException.StatusCode;
         var problemDetails = ExceptionProblemDetailsFactory.Create(

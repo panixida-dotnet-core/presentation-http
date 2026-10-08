@@ -33,6 +33,7 @@ public sealed class LoggingMiddlewareTests
         var logEntry = logger.Entries.ShouldHaveSingleItem();
         logEntry.LogLevel.ShouldBe(expectedLogLevel);
         logEntry.Message.ShouldBe("HTTP request finished");
+        logEntry.Exception.ShouldBeNull();
 
         var requestScope = FindScope(logger, "http.request.method");
         var responseScope = FindScope(logger, "http.response.status_code");

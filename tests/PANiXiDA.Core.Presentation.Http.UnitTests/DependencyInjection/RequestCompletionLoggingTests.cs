@@ -18,13 +18,17 @@ namespace PANiXiDA.Core.Presentation.Http.UnitTests.DependencyInjection;
 
 public sealed class RequestCompletionLoggingTests
 {
-    [Theory(DisplayName = "UseHttp preserves the request scope in handler logs and logs the final response status")]
+    [Theory(DisplayName = "UseHttp logs handled exceptions once with the final status and request scope")]
     [InlineData(true, ExceptionKind.Cancellation, StatusCodes.Status499ClientClosedRequest, LogLevel.Warning)]
     [InlineData(false, ExceptionKind.Cancellation, StatusCodes.Status500InternalServerError, LogLevel.Error)]
+    [InlineData(true, ExceptionKind.TaskCancellation, StatusCodes.Status499ClientClosedRequest, LogLevel.Warning)]
+    [InlineData(false, ExceptionKind.TaskCancellation, StatusCodes.Status500InternalServerError, LogLevel.Error)]
+    [InlineData(true, ExceptionKind.ConnectionFailure, StatusCodes.Status499ClientClosedRequest, LogLevel.Warning)]
+    [InlineData(false, ExceptionKind.ConnectionFailure, StatusCodes.Status500InternalServerError, LogLevel.Error)]
     [InlineData(true, ExceptionKind.ApplicationFailure, StatusCodes.Status500InternalServerError, LogLevel.Error)]
     [InlineData(false, ExceptionKind.ApplicationFailure, StatusCodes.Status500InternalServerError, LogLevel.Error)]
     [InlineData(false, ExceptionKind.BadRequest, StatusCodes.Status400BadRequest, LogLevel.Warning)]
-    public async Task UseHttp_ShouldPreserveRequestScopeAndLogFinalResponseStatus(
+    public async Task UseHttp_ShouldLogHandledExceptionOnceWithFinalStatusAndRequestScope(
         bool requestAborted,
         ExceptionKind exceptionKind,
         int expectedStatus,
@@ -32,6 +36,15 @@ public sealed class RequestCompletionLoggingTests
     {
         using var provider = new CapturingLoggerProvider();
         var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var requestAbortedToken = new CancellationToken(requestAborted);
+        Exception exception = exceptionKind switch
+        {
+            ExceptionKind.Cancellation => new OperationCanceledException(requestAbortedToken),
+            ExceptionKind.TaskCancellation => new TaskCanceledException("Request canceled", null, requestAbortedToken),
+            ExceptionKind.ConnectionFailure => new IOException("Connection closed"),
+            ExceptionKind.BadRequest => new BadHttpRequestException("Invalid request"),
+            _ => new InvalidOperationException("Independent application failure")
+        };
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = Environments.Production });
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         builder.Logging.ClearProviders();
@@ -47,18 +60,8 @@ public sealed class RequestCompletionLoggingTests
         app.UseHttp();
         app.MapGet("/throw", (HttpContext context) =>
         {
-            context.RequestAborted = new CancellationToken(requestAborted);
-            if (exceptionKind == ExceptionKind.Cancellation)
-            {
-                throw new OperationCanceledException(context.RequestAborted);
-            }
-
-            if (exceptionKind == ExceptionKind.BadRequest)
-            {
-                throw new BadHttpRequestException("Invalid request");
-            }
-
-            throw new InvalidOperationException("Independent application failure");
+            context.RequestAborted = requestAbortedToken;
+            throw exception;
         }).WithDisplayName("Throw endpoint");
         await app.StartAsync(TestContext.Current.CancellationToken);
         var address = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.Single();
@@ -72,16 +75,20 @@ public sealed class RequestCompletionLoggingTests
         response.StatusCode.ShouldBe((HttpStatusCode)expectedStatus);
         var completion = provider.Records.Single(record => record.Category == typeof(LoggingMiddleware).FullName);
         completion.Level.ShouldBe(expectedLevel);
+        completion.Message.ShouldBe("HTTP request finished");
         completion.Attributes.Single(pair => pair.Key == "http.response.status_code").Value.ShouldBe(expectedStatus);
+        completion.Attributes.Single(pair => pair.Key == "http.server.request.duration_ms").Value.ShouldBeAssignableTo<double>();
         var records = provider.Records.Where(record => record.Category.StartsWith("PANiXiDA.Core.Presentation.Http.", StringComparison.Ordinal)).ToArray();
-        records.Length.ShouldBe(expectedStatus == StatusCodes.Status499ClientClosedRequest ? 1 : 2);
-        if (expectedStatus != StatusCodes.Status499ClientClosedRequest)
+        records.ShouldHaveSingleItem().ShouldBeSameAs(completion);
+        provider.Records.Count(record => record.Level >= LogLevel.Error).ShouldBe(expectedLevel == LogLevel.Error ? 1 : 0);
+        if (expectedStatus == StatusCodes.Status499ClientClosedRequest)
         {
-            var handlerCategory = exceptionKind == ExceptionKind.BadRequest
-                ? typeof(BadHttpRequestExceptionHandler).FullName
-                : typeof(ExceptionHandler).FullName;
-            var handlerLog = records.Single(record => record.Category == handlerCategory);
-            handlerLog.Level.ShouldBe(expectedLevel);
+            completion.Exception.ShouldBeNull();
+        }
+        else
+        {
+            completion.Exception.ShouldBeSameAs(exception);
+            completion.Exception.ShouldNotBeNull().StackTrace.ShouldNotBeNullOrEmpty();
         }
 
         foreach (var record in records)
@@ -101,6 +108,8 @@ public sealed class RequestCompletionLoggingTests
     public enum ExceptionKind
     {
         Cancellation,
+        TaskCancellation,
+        ConnectionFailure,
         ApplicationFailure,
         BadRequest
     }
@@ -135,10 +144,10 @@ public sealed class RequestCompletionLoggingTests
                         values.AddRange(pairs);
                     }
                 }, attributes);
-                provider.Records.Enqueue(new LogEntry(category, logLevel, attributes));
+                provider.Records.Enqueue(new LogEntry(category, logLevel, formatter(state, exception), exception, attributes));
             }
         }
     }
 
-    private sealed record LogEntry(string Category, LogLevel Level, List<KeyValuePair<string, object?>> Attributes);
+    private sealed record LogEntry(string Category, LogLevel Level, string Message, Exception? Exception, List<KeyValuePair<string, object?>> Attributes);
 }

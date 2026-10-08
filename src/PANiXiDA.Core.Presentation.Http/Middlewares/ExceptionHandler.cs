@@ -1,23 +1,18 @@
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 
 using PANiXiDA.Core.Presentation.Http.Errors;
 
 namespace PANiXiDA.Core.Presentation.Http.Middlewares;
 
-internal sealed class ExceptionHandler(
-    ILogger<ExceptionHandler> logger,
-    IHostEnvironment hostEnvironment) : IExceptionHandler
+internal sealed class ExceptionHandler(IHostEnvironment hostEnvironment) : IExceptionHandler
 {
     public async ValueTask<bool> TryHandleAsync(
         HttpContext httpContext,
         Exception exception,
         CancellationToken cancellationToken)
     {
-        logger.LogError(exception, "Unhandled HTTP exception");
-
         var problemDetails = ExceptionProblemDetailsFactory.Create(
             httpContext,
             exception,

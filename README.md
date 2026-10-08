@@ -242,7 +242,7 @@ Invalid HTTP requests represented by `BadHttpRequestException`, including JSON b
 Client aborts (`OperationCanceledException` or `IOException` with a canceled `RequestAborted`) use status 499 if the response has not started. Other unhandled exceptions use status 500.
 In `Development`, error `ProblemDetails` responses include the exception message in `detail`.
 
-HTTP completion logs include the final status and request context: 4xx (including 499) are `Warning`, 5xx are `Error`, and other responses are `Information`.
+HTTP completion logs include the final status and request context: 4xx (including 499) are `Warning`, 5xx are `Error`, and other responses are `Information`. Handled exceptions are attached to this same log entry with their stack trace; exception handlers only produce the HTTP response.
 
 | Error type | HTTP status | Title |
 | --- | ---: | --- |

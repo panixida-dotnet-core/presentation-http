@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 
@@ -34,7 +35,10 @@ internal sealed class LoggingMiddleware(
                         ["http.server.request.duration_ms"] = elapsed.TotalMilliseconds,
                     }))
                     {
-                        logger.Log(logLevel, "HTTP request finished");
+                        logger.Log(
+                            logLevel,
+                            httpContext.Features.Get<IExceptionHandlerFeature>()?.Error,
+                            "HTTP request finished");
                     }
                 }
             }
