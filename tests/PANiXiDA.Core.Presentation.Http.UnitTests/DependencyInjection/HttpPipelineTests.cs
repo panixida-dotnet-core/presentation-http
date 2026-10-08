@@ -144,25 +144,35 @@ public sealed class HttpPipelineTests
             .ShouldContain("Internal server error");
     }
 
-    [Theory(DisplayName = "UseHttp supports endpoint CORS for preflight and unauthorized or forbidden responses")]
-    [InlineData(false, false, HttpStatusCode.Unauthorized)]
-    [InlineData(false, true, HttpStatusCode.Forbidden)]
-    [InlineData(true, false, HttpStatusCode.NoContent)]
-    public async Task UseHttp_ShouldApplyEndpointCorsBeforeAuthorization(
+    [Theory(DisplayName = "UseHttp applies default and endpoint CORS before authorization")]
+    [InlineData(false, false, false, HttpStatusCode.Unauthorized)]
+    [InlineData(false, false, true, HttpStatusCode.Forbidden)]
+    [InlineData(false, true, false, HttpStatusCode.NoContent)]
+    [InlineData(true, false, false, HttpStatusCode.Unauthorized)]
+    [InlineData(true, false, true, HttpStatusCode.Forbidden)]
+    [InlineData(true, true, false, HttpStatusCode.NoContent)]
+    public async Task UseHttp_ShouldApplyCorsBeforeAuthorization(
+        bool useDefaultPolicy,
         bool preflight,
         bool authenticated,
         HttpStatusCode expectedStatus)
     {
         const string origin = "https://admin.example";
         var builder = CreateBuilder();
-        builder.Services.AddCors(options => options.AddPolicy("Browser", policy =>
-            policy.WithOrigins(origin).AllowAnyHeader().AllowAnyMethod()));
+        builder.Services.AddCors(options => options.AddPolicy(
+            useDefaultPolicy ? options.DefaultPolicyName : "Browser",
+            policy => policy.WithOrigins(origin).AllowAnyHeader().AllowAnyMethod()));
         builder.Services.AddAuthentication(BearerTokenDefaults.AuthenticationScheme).AddBearerToken();
         builder.Services.AddAuthorizationBuilder().AddPolicy("Admin", policy => policy.RequireRole("Admin"));
 
         await using var app = builder.Build();
-        app.UseHttp(pipeline => pipeline.UseCors());
-        app.MapGet("/protected", () => TypedResults.Ok()).RequireAuthorization("Admin").RequireCors("Browser");
+        app.UseHttp();
+        var endpoint = app.MapGet("/protected", () => TypedResults.Ok()).RequireAuthorization("Admin");
+        if (!useDefaultPolicy)
+        {
+            endpoint.RequireCors("Browser");
+        }
+
         await app.StartAsync(TestContext.Current.CancellationToken);
         using var client = CreateClient(app);
         using var request = new HttpRequestMessage(preflight ? HttpMethod.Options : HttpMethod.Get, "/protected");
@@ -187,6 +197,30 @@ public sealed class HttpPipelineTests
             response.Headers.GetValues("Access-Control-Allow-Methods").ShouldBe(["GET"]);
             response.Headers.GetValues("Access-Control-Allow-Headers").ShouldBe(["Authorization"]);
         }
+    }
+
+    [Theory(DisplayName = "UseHttp does not emit CORS headers without a configured policy")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UseHttp_ShouldNotEnableCorsWithoutPolicy(bool registerCors)
+    {
+        var builder = CreateBuilder();
+        if (registerCors)
+        {
+            builder.Services.AddCors();
+        }
+
+        await using var app = builder.Build();
+        app.UseHttp();
+        await app.StartAsync(TestContext.Current.CancellationToken);
+        using var client = CreateClient(app);
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/health");
+        request.Headers.Add("Origin", "https://admin.example");
+
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        response.Headers.Contains("Access-Control-Allow-Origin").ShouldBeFalse();
     }
 
     private static WebApplicationBuilder CreateBuilder()

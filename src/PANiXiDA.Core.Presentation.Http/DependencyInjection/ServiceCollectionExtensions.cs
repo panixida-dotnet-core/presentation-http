@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -77,8 +78,8 @@ public static class ServiceCollectionExtensions
     /// Adds the HTTP presentation middleware and maps source-generated endpoint groups from the specified assemblies.
     /// </summary>
     /// <remarks>
-    /// Configures forwarded headers, exception handling, HTTPS redirection, routing, registered authentication and authorization, then request logging.
-    /// Authentication schemes and authorization policies must be registered by the host. Do not add routing or authentication/authorization middleware separately.
+    /// Configures forwarded headers, exception handling, HTTPS redirection, routing, registered CORS, authentication and authorization, then request logging.
+    /// CORS policies, authentication schemes and authorization policies must be registered by the host. Do not add routing, CORS or authentication/authorization middleware separately.
     /// </remarks>
     /// <param name="app">The ASP.NET Core application instance.</param>
     /// <param name="assemblies">The assemblies containing generated endpoint registrations.</param>
@@ -87,28 +88,17 @@ public static class ServiceCollectionExtensions
         this WebApplication app,
         params Assembly[] assemblies)
     {
-        return app.UseHttp(configureAfterRouting: null, assemblies);
-    }
-
-    /// <summary>
-    /// Adds the HTTP presentation pipeline with optional middleware between routing and authentication/authorization, then maps endpoint groups.
-    /// </summary>
-    /// <param name="app">The ASP.NET Core application instance.</param>
-    /// <param name="configureAfterRouting">Configures middleware such as CORS after routing and before authentication/authorization. Short-circuited assets skip this middleware.</param>
-    /// <param name="assemblies">The assemblies containing generated endpoint registrations.</param>
-    /// <returns>The original application instance for further configuration.</returns>
-    public static WebApplication UseHttp(
-        this WebApplication app,
-        Action<WebApplication>? configureAfterRouting,
-        params Assembly[] assemblies)
-    {
         app.UseForwardedHeadersConfiguration();
         app.UseExceptionHandler();
         app.UseHttpsRedirection();
         app.UseRouting();
-        configureAfterRouting?.Invoke(app);
 
         var serviceProviderIsService = app.Services.GetService<IServiceProviderIsService>();
+        if (serviceProviderIsService?.IsService(typeof(ICorsService)) is true)
+        {
+            app.UseCors();
+        }
+
         if (serviceProviderIsService?.IsService(typeof(IAuthenticationSchemeProvider)) is true)
         {
             app.UseAuthentication();

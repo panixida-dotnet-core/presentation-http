@@ -61,10 +61,9 @@ app.Run();
 
 Call `AddValidation()` in each endpoint/DTO assembly to generate validation metadata for its DTO properties. `AddHttp` registers the shared validation services.
 
-`UseHttp` configures forwarded headers → exception handling → HTTPS redirection → routing → authentication/authorization → request logging.
-Authentication and authorization middleware are enabled independently when their services are registered; the host still configures schemes and policies with `AddAuthentication` and `AddAuthorization`.
-When upgrading to 5.x, remove separate `UseRouting`, `UseAuthentication`, and `UseAuthorization` calls, along with duplicated forwarded headers, exception handling, and HTTPS redirection calls. Review custom middleware placement around `UseHttp`.
-For middleware that needs the selected endpoint before authorization, use the callback: `app.UseHttp(pipeline => pipeline.UseCors(), typeof(Program).Assembly)` (register CORS services separately).
+`UseHttp` configures forwarded headers → exception handling → HTTPS redirection → routing → CORS → authentication/authorization → request logging.
+CORS, authentication and authorization middleware are enabled independently when their services are registered. The host configures schemes and policies with `AddCors`, `AddAuthentication` and `AddAuthorization`; CORS uses the default policy or endpoint policies.
+When upgrading to 5.x, remove separate `UseRouting`, `UseCors`, `UseAuthentication`, and `UseAuthorization` calls, along with duplicated forwarded headers, exception handling, and HTTPS redirection calls. Review custom middleware placement around `UseHttp`.
 
 ## Forwarded Headers
 
