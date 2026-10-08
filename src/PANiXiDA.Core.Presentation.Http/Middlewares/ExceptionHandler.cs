@@ -4,7 +4,6 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 using PANiXiDA.Core.Presentation.Http.Errors;
-using PANiXiDA.Core.Presentation.Http.Logging;
 
 namespace PANiXiDA.Core.Presentation.Http.Middlewares;
 
@@ -17,10 +16,7 @@ internal sealed class ExceptionHandler(
         Exception exception,
         CancellationToken cancellationToken)
     {
-        using (logger.BeginScope(HttpRequestLogScope.Create(httpContext)))
-        {
-            logger.LogError(exception, "Unhandled HTTP exception");
-        }
+        logger.LogError(exception, "Unhandled HTTP exception");
 
         var problemDetails = ExceptionProblemDetailsFactory.Create(
             httpContext,

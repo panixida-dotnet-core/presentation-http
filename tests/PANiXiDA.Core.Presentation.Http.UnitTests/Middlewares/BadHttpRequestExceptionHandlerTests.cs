@@ -67,19 +67,7 @@ public sealed class BadHttpRequestExceptionHandlerTests
         logEntry.Exception.ShouldBeSameAs(exception);
         logEntry.Message.ShouldBe("Invalid HTTP request");
 
-        var scopeValues = logger.Scopes
-            .ShouldHaveSingleItem()
-            .ShouldBeAssignableTo<IReadOnlyDictionary<string, object?>>()!;
-
-        scopeValues["network.protocol.name"].ShouldBe("http");
-        scopeValues["http.request.method"].ShouldBe(HttpMethods.Post);
-        scopeValues["url.path"].ShouldBe("/orders");
-        scopeValues["url.query"].ShouldBe(string.Empty);
-        scopeValues["http.route"].ShouldBe("/orders");
-        scopeValues["aspnetcore.endpoint.display_name"].ShouldBe("Test endpoint");
-        scopeValues["enduser.id"].ShouldBe("user-id");
-        scopeValues["client.address"].ShouldBe("127.0.0.1");
-        scopeValues["user_agent.original"].ShouldBe("UnitTest");
+        logger.Scopes.ShouldBeEmpty();
     }
 
     [Fact(DisplayName = "TryHandleAsync ignores exceptions that are not bad HTTP requests")]

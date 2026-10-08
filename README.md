@@ -239,8 +239,10 @@ public static IResult CreateOrder()
 ## HTTP Error Mapping
 
 Invalid HTTP requests represented by `BadHttpRequestException`, including JSON body binding failures, preserve their framework status code and are mapped to `ProblemDetails`.
-Other unhandled exceptions are mapped to status 500 in every environment.
-In `Development`, both responses include the exception message in `detail`.
+Client aborts (`OperationCanceledException` or `IOException` with a canceled `RequestAborted`) use status 499 if the response has not started. Other unhandled exceptions use status 500.
+In `Development`, error `ProblemDetails` responses include the exception message in `detail`.
+
+HTTP completion logs include the final status and request context: 4xx (including 499) are `Warning`, 5xx are `Error`, and other responses are `Information`.
 
 | Error type | HTTP status | Title |
 | --- | ---: | --- |

@@ -5,7 +5,6 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 using PANiXiDA.Core.Presentation.Http.Errors;
-using PANiXiDA.Core.Presentation.Http.Logging;
 
 namespace PANiXiDA.Core.Presentation.Http.Middlewares;
 
@@ -23,10 +22,7 @@ internal sealed class BadHttpRequestExceptionHandler(
             return false;
         }
 
-        using (logger.BeginScope(HttpRequestLogScope.Create(httpContext)))
-        {
-            logger.LogWarning(exception, "Invalid HTTP request");
-        }
+        logger.LogWarning(exception, "Invalid HTTP request");
 
         var statusCode = badHttpRequestException.StatusCode;
         var problemDetails = ExceptionProblemDetailsFactory.Create(

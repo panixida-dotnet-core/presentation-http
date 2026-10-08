@@ -82,9 +82,9 @@ public static class ServiceCollectionExtensions
         params Assembly[] assemblies)
     {
         app.UseForwardedHeadersConfiguration();
+        app.UseMiddleware<LoggingMiddleware>();
         app.UseExceptionHandler();
         app.UseHttpsRedirection();
-        app.UseMiddleware<LoggingMiddleware>();
         app.UseOpenApiConfiguration();
         app.MapHealthChecks("/health");
 
