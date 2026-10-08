@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Security.Claims;
 
@@ -12,30 +13,30 @@ using Microsoft.Extensions.Logging;
 
 using PANiXiDA.Core.Presentation.Http.DependencyInjection;
 using PANiXiDA.Core.Presentation.Http.Middlewares;
-using PANiXiDA.Core.Presentation.Http.UnitTests.Support;
 
 namespace PANiXiDA.Core.Presentation.Http.UnitTests.DependencyInjection;
 
 public sealed class RequestCompletionLoggingTests
 {
     [Theory(DisplayName = "UseHttp logs the final response status after exception handling")]
-    [InlineData(true, true, StatusCodes.Status499ClientClosedRequest, LogLevel.Information)]
-    [InlineData(false, true, StatusCodes.Status500InternalServerError, LogLevel.Error)]
-    [InlineData(true, false, StatusCodes.Status500InternalServerError, LogLevel.Error)]
-    [InlineData(false, false, StatusCodes.Status500InternalServerError, LogLevel.Error)]
+    [InlineData(true, ExceptionKind.Cancellation, StatusCodes.Status499ClientClosedRequest, LogLevel.Information)]
+    [InlineData(false, ExceptionKind.Cancellation, StatusCodes.Status500InternalServerError, LogLevel.Error)]
+    [InlineData(true, ExceptionKind.ApplicationFailure, StatusCodes.Status500InternalServerError, LogLevel.Error)]
+    [InlineData(false, ExceptionKind.ApplicationFailure, StatusCodes.Status500InternalServerError, LogLevel.Error)]
+    [InlineData(false, ExceptionKind.BadRequest, StatusCodes.Status400BadRequest, LogLevel.Warning)]
     public async Task UseHttp_ShouldLogFinalResponseStatus(
         bool requestAborted,
-        bool cancellationException,
+        ExceptionKind exceptionKind,
         int expectedStatus,
         LogLevel expectedLevel)
     {
-        var logger = new TestLogger<LoggingMiddleware>();
+        using var provider = new CapturingLoggerProvider();
         var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = Environments.Production });
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         builder.Logging.ClearProviders();
+        builder.Logging.AddProvider(provider);
         builder.Services.AddHttp(builder.Configuration);
-        builder.Services.AddSingleton<ILogger<LoggingMiddleware>>(logger);
         await using var app = builder.Build();
         app.Use(async (context, next) =>
         {
@@ -47,9 +48,14 @@ public sealed class RequestCompletionLoggingTests
         app.MapGet("/throw", (HttpContext context) =>
         {
             context.RequestAborted = new CancellationToken(requestAborted);
-            if (cancellationException)
+            if (exceptionKind == ExceptionKind.Cancellation)
             {
                 throw new OperationCanceledException(context.RequestAborted);
+            }
+
+            if (exceptionKind == ExceptionKind.BadRequest)
+            {
+                throw new BadHttpRequestException("Invalid request");
             }
 
             throw new InvalidOperationException("Independent application failure");
@@ -62,12 +68,60 @@ public sealed class RequestCompletionLoggingTests
         await completed.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
         response.StatusCode.ShouldBe((HttpStatusCode)expectedStatus);
-        logger.Entries.ShouldHaveSingleItem().LogLevel.ShouldBe(expectedLevel);
-        var scopes = logger.Scopes.Cast<IReadOnlyDictionary<string, object?>>().ToArray();
-        scopes.Single(scope => scope.ContainsKey("http.response.status_code"))["http.response.status_code"].ShouldBe(expectedStatus);
-        var requestScope = scopes.Single(scope => scope.ContainsKey("http.route"));
-        requestScope["http.route"].ShouldBe("/throw");
-        requestScope["aspnetcore.endpoint.display_name"].ShouldBe("Throw endpoint");
-        requestScope["enduser.id"].ShouldBe("user-42");
+        var completion = provider.Records.Single(record => record.Category == typeof(LoggingMiddleware).FullName);
+        completion.Level.ShouldBe(expectedLevel);
+        completion.Attributes.Single(pair => pair.Key == "http.response.status_code").Value.ShouldBe(expectedStatus);
+        var records = provider.Records.Where(record => record.Category.StartsWith("PANiXiDA.Core.Presentation.Http.", StringComparison.Ordinal)).ToArray();
+        records.Length.ShouldBe(expectedStatus == StatusCodes.Status499ClientClosedRequest ? 1 : 2);
+        foreach (var record in records)
+        {
+            record.Attributes.Single(pair => pair.Key == "http.route").Value.ShouldBe("/throw");
+            record.Attributes.Single(pair => pair.Key == "aspnetcore.endpoint.display_name").Value.ShouldBe("Throw endpoint");
+            record.Attributes.Single(pair => pair.Key == "enduser.id").Value.ShouldBe("user-42");
+        }
     }
+
+    public enum ExceptionKind
+    {
+        Cancellation,
+        ApplicationFailure,
+        BadRequest
+    }
+
+    private sealed class CapturingLoggerProvider : ILoggerProvider, ISupportExternalScope
+    {
+        private IExternalScopeProvider scopeProvider = new LoggerExternalScopeProvider();
+
+        public ConcurrentQueue<LogEntry> Records { get; } = new();
+
+        public ILogger CreateLogger(string categoryName) => new CapturingLogger(categoryName, this);
+
+        public void SetScopeProvider(IExternalScopeProvider externalScopeProvider) => scopeProvider = externalScopeProvider;
+
+        public void Dispose()
+        {
+        }
+
+        private sealed class CapturingLogger(string category, CapturingLoggerProvider provider) : ILogger
+        {
+            public IDisposable BeginScope<TState>(TState state) where TState : notnull => provider.scopeProvider.Push(state);
+
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            {
+                var attributes = new List<KeyValuePair<string, object?>>();
+                provider.scopeProvider.ForEachScope(static (scope, values) =>
+                {
+                    if (scope is IEnumerable<KeyValuePair<string, object?>> pairs)
+                    {
+                        values.AddRange(pairs);
+                    }
+                }, attributes);
+                provider.Records.Enqueue(new LogEntry(category, logLevel, attributes));
+            }
+        }
+    }
+
+    private sealed record LogEntry(string Category, LogLevel Level, List<KeyValuePair<string, object?>> Attributes);
 }
