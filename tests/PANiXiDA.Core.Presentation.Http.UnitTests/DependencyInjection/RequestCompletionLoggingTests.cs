@@ -19,7 +19,7 @@ namespace PANiXiDA.Core.Presentation.Http.UnitTests.DependencyInjection;
 public sealed class RequestCompletionLoggingTests
 {
     [Theory(DisplayName = "UseHttp preserves the request scope in handler logs and logs the final response status")]
-    [InlineData(true, ExceptionKind.Cancellation, StatusCodes.Status499ClientClosedRequest, LogLevel.Information)]
+    [InlineData(true, ExceptionKind.Cancellation, StatusCodes.Status499ClientClosedRequest, LogLevel.Warning)]
     [InlineData(false, ExceptionKind.Cancellation, StatusCodes.Status500InternalServerError, LogLevel.Error)]
     [InlineData(true, ExceptionKind.ApplicationFailure, StatusCodes.Status500InternalServerError, LogLevel.Error)]
     [InlineData(false, ExceptionKind.ApplicationFailure, StatusCodes.Status500InternalServerError, LogLevel.Error)]

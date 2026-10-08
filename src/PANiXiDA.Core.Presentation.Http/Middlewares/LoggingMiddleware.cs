@@ -48,8 +48,7 @@ internal sealed class LoggingMiddleware(
             return LogLevel.Error;
         }
 
-        if (statusCode >= StatusCodes.Status400BadRequest
-            && statusCode != StatusCodes.Status499ClientClosedRequest)
+        if (statusCode >= StatusCodes.Status400BadRequest)
         {
             return LogLevel.Warning;
         }
