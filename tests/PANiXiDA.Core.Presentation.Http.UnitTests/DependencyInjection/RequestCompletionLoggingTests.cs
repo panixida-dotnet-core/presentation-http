@@ -64,7 +64,9 @@ public sealed class RequestCompletionLoggingTests
         var address = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.Single();
         using var client = new HttpClient { BaseAddress = new Uri(address) };
 
-        using var response = await client.GetAsync("/throw", TestContext.Current.CancellationToken);
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/throw?status=active");
+        request.Headers.UserAgent.ParseAdd("UnitTest");
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
         await completed.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
         response.StatusCode.ShouldBe((HttpStatusCode)expectedStatus);
@@ -75,9 +77,15 @@ public sealed class RequestCompletionLoggingTests
         records.Length.ShouldBe(expectedStatus == StatusCodes.Status499ClientClosedRequest ? 1 : 2);
         foreach (var record in records)
         {
+            record.Attributes.Single(pair => pair.Key == "network.protocol.name").Value.ShouldBe("http");
+            record.Attributes.Single(pair => pair.Key == "http.request.method").Value.ShouldBe(HttpMethods.Get);
+            record.Attributes.Single(pair => pair.Key == "url.path").Value.ShouldBe("/throw");
+            record.Attributes.Single(pair => pair.Key == "url.query").Value.ShouldBe("?status=active");
             record.Attributes.Single(pair => pair.Key == "http.route").Value.ShouldBe("/throw");
             record.Attributes.Single(pair => pair.Key == "aspnetcore.endpoint.display_name").Value.ShouldBe("Throw endpoint");
             record.Attributes.Single(pair => pair.Key == "enduser.id").Value.ShouldBe("user-42");
+            record.Attributes.Single(pair => pair.Key == "client.address").Value.ShouldBe("127.0.0.1");
+            record.Attributes.Single(pair => pair.Key == "user_agent.original").Value.ShouldBe("UnitTest");
         }
     }
 

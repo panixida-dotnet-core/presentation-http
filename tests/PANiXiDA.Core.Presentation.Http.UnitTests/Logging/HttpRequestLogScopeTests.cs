@@ -25,6 +25,9 @@ public sealed class HttpRequestLogScopeTests
         scope["enduser.id"].ShouldBe("user-id");
         scope["client.address"].ShouldBe("127.0.0.1");
         scope["user_agent.original"].ShouldBe("UnitTest");
+        scope.ContainsKey("TraceIdentifier").ShouldBeFalse();
+        scope.ContainsKey("TraceId").ShouldBeFalse();
+        scope.ContainsKey("SpanId").ShouldBeFalse();
     }
 
     [Fact(DisplayName = "Create rejects a null HTTP context")]
