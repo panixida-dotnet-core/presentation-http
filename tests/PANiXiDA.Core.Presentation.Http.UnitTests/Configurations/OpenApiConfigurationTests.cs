@@ -132,19 +132,17 @@ public sealed class OpenApiConfigurationTests
                     context.Response.Headers["X-Before-Routing"] = "executed";
                     await next(context);
                 });
-                application.UseRouting();
-                application.Use(async (context, next) =>
-                {
-                    context.Response.Headers["X-Test-Middleware"] = "executed";
-                    await next(context);
-                });
-
                 if (mapStaticAssetsExplicitly)
                 {
                     application.MapStaticAssets();
                 }
             },
-            useSlimBuilder: useSlimBuilder);
+            useSlimBuilder: useSlimBuilder,
+            configureAfterHttp: application => application.Use(async (context, next) =>
+            {
+                context.Response.Headers["X-Test-Middleware"] = "executed";
+                await next(context);
+            }));
         using var client = CreateClient(app);
 
         var scalarContent = await client.GetStringAsync("/scalar", TestContext.Current.CancellationToken);
@@ -180,10 +178,6 @@ public sealed class OpenApiConfigurationTests
             {
                 application.UseForwardedHeaders();
                 application.UseHsts();
-                application.UseHttpsRedirection();
-                application.UseRouting();
-                application.UseAuthentication();
-                application.UseAuthorization();
                 application.MapGet("/protected", static () => TypedResults.Ok()).RequireAuthorization();
             },
             configureBuilder: builder =>
@@ -724,7 +718,8 @@ public sealed class OpenApiConfigurationTests
         CancellationToken cancellationToken,
         Action<WebApplication>? configureApplication = null,
         bool useSlimBuilder = false,
-        Action<WebApplicationBuilder>? configureBuilder = null)
+        Action<WebApplicationBuilder>? configureBuilder = null,
+        Action<WebApplication>? configureAfterHttp = null)
     {
         var options = new WebApplicationOptions
         {
@@ -748,6 +743,7 @@ public sealed class OpenApiConfigurationTests
         var app = builder.Build();
         configureApplication?.Invoke(app);
         app.UseHttp();
+        configureAfterHttp?.Invoke(app);
 
         await app.StartAsync(cancellationToken);
 

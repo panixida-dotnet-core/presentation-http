@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -74,6 +76,10 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Adds the HTTP presentation middleware and maps source-generated endpoint groups from the specified assemblies.
     /// </summary>
+    /// <remarks>
+    /// Configures forwarded headers, exception handling, HTTPS redirection, routing, registered authentication and authorization, then request logging.
+    /// Authentication schemes and authorization policies must be registered by the host. Do not add routing or authentication/authorization middleware separately.
+    /// </remarks>
     /// <param name="app">The ASP.NET Core application instance.</param>
     /// <param name="assemblies">The assemblies containing generated endpoint registrations.</param>
     /// <returns>The original application instance for further configuration.</returns>
@@ -84,6 +90,19 @@ public static class ServiceCollectionExtensions
         app.UseForwardedHeadersConfiguration();
         app.UseExceptionHandler();
         app.UseHttpsRedirection();
+        app.UseRouting();
+
+        var serviceProviderIsService = app.Services.GetService<IServiceProviderIsService>();
+        if (serviceProviderIsService?.IsService(typeof(IAuthenticationSchemeProvider)) is true)
+        {
+            app.UseAuthentication();
+        }
+
+        if (serviceProviderIsService?.IsService(typeof(IAuthorizationHandlerProvider)) is true)
+        {
+            app.UseAuthorization();
+        }
+
         app.UseMiddleware<LoggingMiddleware>();
         app.UseOpenApiConfiguration();
         app.MapHealthChecks("/health");

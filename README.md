@@ -38,7 +38,7 @@ Reference the package in each endpoint project with its analyzer assets enabled.
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="PANiXiDA.Core.Presentation.Http" Version="4.0.0" />
+  <PackageReference Include="PANiXiDA.Core.Presentation.Http" Version="5.0.0" />
 </ItemGroup>
 ```
 
@@ -60,6 +60,10 @@ app.Run();
 ```
 
 Call `AddValidation()` in each endpoint/DTO assembly to generate validation metadata for its DTO properties. `AddHttp` registers the shared validation services.
+
+`UseHttp` configures forwarded headers → exception handling → HTTPS redirection → routing → authentication/authorization → request logging.
+Authentication and authorization middleware are enabled independently when their services are registered; the host still configures schemes and policies with `AddAuthentication` and `AddAuthorization`.
+When upgrading to 5.x, remove separate `UseRouting`, `UseAuthentication`, and `UseAuthorization` calls, along with duplicated forwarded headers, exception handling, and HTTPS redirection calls. Review custom middleware placement around `UseHttp`.
 
 ## Forwarded Headers
 
@@ -407,16 +411,8 @@ If either value is missing or blank, Scalar keeps its corresponding default.
 Place local icons in the host's `wwwroot` (`Microsoft.NET.Sdk.Web`).
 In `Development`, a nonblank `Favicon` makes `UseHttp` call `MapStaticAssets().ShortCircuit()` for all host assets.
 These assets must be public: middleware after routing, including authorization and CORS, is skipped.
-Place required middleware (HTTPS/HSTS, forwarded headers, error handling) before an explicit `UseRouting()`:
-
-```csharp
-app.UseForwardedHeaders();
-app.UseHttpsRedirection();
-app.UseRouting();
-app.UseAuthentication();
-app.UseAuthorization();
-app.UseHttp();
-```
+`UseHttp` ensures forwarded headers, exception handling, and HTTPS redirection run before static assets.
+Host-specific middleware needed for assets must run before `UseHttp`; for HSTS behind a proxy, call `UseForwardedHeaders()` then `UseHsts()` before it.
 
 With `CreateSlimBuilder`, also call `builder.WebHost.UseStaticWebAssets()` in `Development` before `Build()`.
 Outside `Development`, OpenAPI, Scalar, and automatic asset mapping are disabled.
