@@ -117,7 +117,7 @@ public sealed class LoggingMiddlewareTests
         var httpContext = TestHttpContextFactory.CreateMinimalHttpContext();
         Task next(HttpContext context)
         {
-            context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", "authenticated-user")]));
+            context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", "authenticated-user")], "test"));
             return throwException
                 ? Task.FromException(new InvalidOperationException("Request failed"))
                 : Task.CompletedTask;

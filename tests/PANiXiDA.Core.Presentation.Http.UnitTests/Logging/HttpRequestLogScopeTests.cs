@@ -18,7 +18,7 @@ public sealed class HttpRequestLogScopeTests
     public void Create_ShouldResolveUserId(string? subject, string? nameIdentifier, string? expected)
     {
         var context = new DefaultHttpContext();
-        var claims = new List<Claim>();
+        var claims = new List<Claim> { new(ClaimTypes.Name, "display-name") };
         if (subject is not null)
         {
             claims.Add(new Claim("sub", subject));
@@ -35,6 +35,30 @@ public sealed class HttpRequestLogScopeTests
 
         scope["enduser.id"].ShouldBe(expected);
         scope.Single(pair => pair.Key == "enduser.id").Value.ShouldBe(expected);
+    }
+
+    [Theory(DisplayName = "Request scope ignores claims from unauthenticated identities")]
+    [InlineData(false, false, null)]
+    [InlineData(true, false, "authenticated-user")]
+    [InlineData(true, true, "authenticated-user")]
+    public void Create_ShouldIgnoreUnauthenticatedIdentityClaims(bool includeAuthenticatedIdentity, bool useSubject, string? expected)
+    {
+        var principal = new ClaimsPrincipal(new ClaimsIdentity([
+            new Claim("sub", "untrusted-subject"),
+            new Claim(ClaimTypes.NameIdentifier, "untrusted-mapped-id")]));
+        if (includeAuthenticatedIdentity)
+        {
+            principal.AddIdentity(new ClaimsIdentity([
+                new Claim(useSubject ? "sub" : ClaimTypes.NameIdentifier, "authenticated-user")], "test"));
+        }
+
+        var context = new DefaultHttpContext { User = principal };
+        var scope = HttpRequestLogScope.Create(context);
+
+        scope["enduser.id"].ShouldBe(expected);
+        scope.Complete();
+        context.User = new ClaimsPrincipal();
+        scope["enduser.id"].ShouldBe(expected);
     }
 
     [Fact(DisplayName = "Request scope observes authentication after scope creation")]
@@ -66,7 +90,13 @@ public sealed class HttpRequestLogScopeTests
         userId.ShouldBe("authenticated-user");
         scope.Single(pair => pair.Key == "enduser.id").Value.ShouldBe("authenticated-user");
         scope.Values.ShouldContain("authenticated-user");
-        ((IEnumerable)scope).Cast<KeyValuePair<string, object?>>().ToArray().ShouldBe(scope.ToArray());
+        var untypedAttributes = new List<KeyValuePair<string, object?>>();
+        foreach (KeyValuePair<string, object?> attribute in (IEnumerable)scope)
+        {
+            untypedAttributes.Add(attribute);
+        }
+
+        untypedAttributes.ToArray().ShouldBe(scope.ToArray());
         scope.ContainsKey("missing").ShouldBeFalse();
         scope.TryGetValue("missing", out _).ShouldBeFalse();
         scope.TryGetValue("http.request.method", out var method).ShouldBeTrue();

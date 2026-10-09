@@ -83,9 +83,18 @@ internal sealed class HttpRequestLogScope : IReadOnlyDictionary<string, object?>
     {
         lock (_syncRoot)
         {
-            return _httpContext is { } context
-                ? context.User.FindFirstValue("sub") ?? context.User.FindFirstValue(ClaimTypes.NameIdentifier)
-                : _completedUserId;
+            if (_httpContext is not { } context)
+            {
+                return _completedUserId;
+            }
+
+            var claims = context.User.Identities
+                .Where(identity => identity.IsAuthenticated)
+                .SelectMany(identity => identity.Claims);
+            var claim = claims.FirstOrDefault(candidate => candidate.Type == "sub")
+                ?? claims.FirstOrDefault(candidate => candidate.Type == ClaimTypes.NameIdentifier);
+
+            return claim?.Value;
         }
     }
 }
