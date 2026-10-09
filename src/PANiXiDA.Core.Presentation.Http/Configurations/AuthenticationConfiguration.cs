@@ -12,6 +12,9 @@ internal static class AuthenticationConfiguration
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        services.AddAuthentication();
+        services.AddAuthorization();
+
         var section = configuration.GetSection(nameof(OpenIddictValidationOptions));
         if (!section.Exists())
         {

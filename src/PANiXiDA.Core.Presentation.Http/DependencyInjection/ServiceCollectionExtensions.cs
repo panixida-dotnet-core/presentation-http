@@ -66,8 +66,6 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(moduleRegistry);
         services.AddHttpContextAccessor();
         services.TryAddScoped<ICurrentUser, HttpCurrentUser>();
-        services.AddAuthentication();
-        services.AddAuthorization();
         services.AddCors();
         services.AddAuthenticationConfiguration(configuration);
         services.AddForwardedHeadersConfiguration(configuration);
