@@ -109,6 +109,18 @@ public sealed class HttpCurrentUserTests
         user.HasPermission("files.create").ShouldBeFalse();
     }
 
+    [Theory(DisplayName = "Null claim types are rejected regardless of authentication state")]
+    [InlineData(null)]
+    [InlineData("Bearer")]
+    public void TryGetClaimValue_ShouldRejectNullClaimType(string? authenticationType)
+    {
+        var user = CreateUser(new ClaimsIdentity(authenticationType));
+
+        var exception = Should.Throw<ArgumentNullException>(() => user.TryGetClaimValue<Guid>(null!, out _));
+
+        exception.ParamName.ShouldBe("claimType");
+    }
+
     [Fact(DisplayName = "Claim parsing uses invariant culture and only the first matching claim")]
     public void TryGetClaimValue_ShouldUseInvariantCultureAndFirstClaim()
     {

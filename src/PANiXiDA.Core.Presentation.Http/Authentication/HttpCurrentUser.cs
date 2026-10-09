@@ -50,6 +50,8 @@ internal sealed class HttpCurrentUser(IHttpContextAccessor httpContextAccessor) 
     public bool TryGetClaimValue<T>(string claimType, [MaybeNullWhen(false)] out T value)
         where T : IParsable<T>
     {
+        ArgumentNullException.ThrowIfNull(claimType);
+
         var claim = Identity?.FindFirst(claimType);
         if (claim is not null && T.TryParse(claim.Value, CultureInfo.InvariantCulture, out value))
         {

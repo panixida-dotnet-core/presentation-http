@@ -73,7 +73,8 @@ one, it exposes an anonymous caller with no claims or permissions. `UserId` pars
 `sub` (or `ClaimTypes.NameIdentifier` when `sub` is absent) as a GUID. `UserName`
 uses the configured name claim type, falling back to `name`; roles use the configured
 role claim type and `role`. `TryGetClaimValue<T>` parses the first matching claim
-with invariant culture. Permission checks match individual `permission` values
+with invariant culture and rejects a null `claimType` with `ArgumentNullException`.
+Permission checks match individual `permission` values
 exactly and never derive permissions from roles or UI sections.
 
 The host must configure authentication and run it before invoking handlers. This
