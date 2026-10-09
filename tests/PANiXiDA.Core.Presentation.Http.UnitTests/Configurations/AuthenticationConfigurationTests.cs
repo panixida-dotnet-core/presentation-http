@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -73,27 +74,25 @@ public sealed class AuthenticationConfigurationTests
         await Should.ThrowAsync<InvalidOperationException>(() => app.StartAsync(TestContext.Current.CancellationToken));
     }
 
-    [Theory(DisplayName = "Introspection requires HTTPS and explicit non-empty audiences")]
-    [InlineData("Issuer", "http://identity.example.test/", "Issuer")]
-    [InlineData("Audiences:0", null, "Audiences")]
-    [InlineData("Audiences:0", " ", "Audiences")]
-    public async Task AddHttp_ShouldRejectUnsafeConfiguration(string key, string? value, string option)
+    [Theory(DisplayName = "Startup uses OpenIddict validation without additional issuer or audience rules")]
+    [InlineData("Issuer", "http://identity.example.test/")]
+    [InlineData("Audiences:0", null)]
+    [InlineData("Audiences:0", " ")]
+    public async Task AddHttp_ShouldUseOpenIddictValidationRules(string key, string? value)
     {
         var builder = CreateBuilder(key, value);
         builder.Services.AddHttp(builder.Configuration);
         await using var app = builder.Build();
 
-        var exception = await Should.ThrowAsync<OptionsValidationException>(
-            () => app.StartAsync(TestContext.Current.CancellationToken));
-
-        exception.Message.ShouldContain($"OpenIddictValidationOptions:{option}");
+        await Should.NotThrowAsync(() => app.StartAsync(TestContext.Current.CancellationToken));
     }
 
-    [Fact(DisplayName = "Missing audience configuration cannot disable token recipient validation")]
-    public async Task AddHttp_ShouldRequireAudienceConfiguration()
+    [Fact(DisplayName = "OpenIddict permits startup without audience configuration")]
+    public async Task AddHttp_ShouldAllowMissingAudienceConfiguration()
     {
         var builder = WebApplication.CreateBuilder();
         builder.Logging.ClearProviders();
+        builder.WebHost.UseUrls("http://127.0.0.1:0");
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["OpenIddictValidationOptions:Issuer"] = "https://identity.example.test/",
@@ -103,16 +102,16 @@ public sealed class AuthenticationConfigurationTests
         builder.Services.AddHttp(builder.Configuration);
         await using var app = builder.Build();
 
-        var exception = await Should.ThrowAsync<OptionsValidationException>(
-            () => app.StartAsync(TestContext.Current.CancellationToken));
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
-        exception.Message.ShouldContain("OpenIddictValidationOptions:Audiences");
+        app.Services.GetRequiredService<IOptions<OpenIddictValidationOptions>>().Value.Audiences.ShouldBeEmpty();
     }
 
     private static WebApplicationBuilder CreateBuilder(string key, string? value)
     {
         var builder = WebApplication.CreateBuilder();
         builder.Logging.ClearProviders();
+        builder.WebHost.UseUrls("http://127.0.0.1:0");
         var configuration = CreateConfiguration();
         configuration[$"OpenIddictValidationOptions:{key}"] = value;
         builder.Configuration.AddConfiguration(configuration);

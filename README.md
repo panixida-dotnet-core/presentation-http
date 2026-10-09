@@ -100,8 +100,9 @@ own `ICurrentUser` for handlers that require authorization.
 Supply `OpenIddictValidationOptions:ClientSecret` from your secret store.
 Register this confidential client in Identity with introspection permission.
 For OpenIddict Identity, include its `ClientId` in the token's audiences so introspection
-returns user claims. `Issuer` must use HTTPS and `Audiences` must contain non-empty values;
-invalid settings prevent startup. Without this section, `AddHttp` preserves host authentication,
+returns user claims. `ValidateOnStart()` runs OpenIddict's built-in configuration checks.
+Use an HTTPS issuer and configure `Audiences` to restrict token recipients; an empty list
+disables audience validation. Without this section, `AddHttp` preserves host authentication,
 including `UseLocalServer` in an Identity host.
 
 ```csharp
@@ -118,7 +119,7 @@ app.Run();
 ```
 
 Send `Authorization: Bearer <access_token>`. Discovery locates Identity's introspection
-endpoint; each authenticated request checks token activity, expiry, and audience.
+endpoint; each authenticated request checks token activity, expiry, and configured audiences.
 Revoked tokens are rejected on the next request. Cookie, query, and form tokens are ignored.
 Invalid tokens return 401, failed policies return 403, and Identity failures deny access.
 Public endpoints remain public. Identity availability affects authenticated requests.

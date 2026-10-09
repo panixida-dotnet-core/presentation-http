@@ -26,11 +26,6 @@ internal static class AuthenticationConfiguration
                 options.ClientId = section[nameof(options.ClientId)];
                 options.ClientSecret = section[nameof(options.ClientSecret)];
             })
-            .Validate(options => options.Issuer!.Scheme == Uri.UriSchemeHttps,
-                "OpenIddictValidationOptions:Issuer must be an absolute HTTPS URI.")
-            .Validate(options => options.Audiences.Count > 0 &&
-                options.Audiences.All(audience => !string.IsNullOrWhiteSpace(audience)),
-                "OpenIddictValidationOptions:Audiences must contain non-empty audience values.")
             .ValidateOnStart();
 
         services.AddAuthentication(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme);
