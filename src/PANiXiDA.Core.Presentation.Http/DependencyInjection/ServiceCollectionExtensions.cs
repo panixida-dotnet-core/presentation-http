@@ -1,7 +1,10 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
+using PANiXiDA.Core.Application.Authentication.Abstractions;
+using PANiXiDA.Core.Presentation.Http.Authentication;
 using PANiXiDA.Core.Presentation.Http.Configurations;
 using PANiXiDA.Core.Presentation.Http.Endpoints;
 using PANiXiDA.Core.Presentation.Http.Middlewares;
@@ -58,6 +61,8 @@ public static class ServiceCollectionExtensions
         var moduleRegistry = new HttpModuleRegistry(configuration, moduleAssemblies);
 
         services.AddSingleton(moduleRegistry);
+        services.AddHttpContextAccessor();
+        services.TryAddScoped<ICurrentUser, HttpCurrentUser>();
         services.AddForwardedHeadersConfiguration(configuration);
         services.AddApiVersioningConfiguration();
         services.AddJsonConfiguration();

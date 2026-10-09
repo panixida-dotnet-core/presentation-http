@@ -15,6 +15,7 @@ It provides common Minimal API endpoint conventions, API versioning, OpenAPI set
 ## Features
 
 - `AddHttp` registers the default HTTP presentation services.
+- `ICurrentUser` exposes the authenticated HTTP caller to Application handlers.
 - `UseHttp` adds the default middleware pipeline and maps source-generated endpoint registrations.
 - HTTP JSON contracts enforce required constructor parameters, nullable annotations, and strict number handling.
 - Module assemblies can be mapped to separate OpenAPI documents and Scalar sources for each API version through the `HttpModules` configuration section.
@@ -38,7 +39,7 @@ Reference the package in each endpoint project with its analyzer assets enabled.
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="PANiXiDA.Core.Presentation.Http" Version="4.0.0" />
+  <PackageReference Include="PANiXiDA.Core.Presentation.Http" Version="5.0.0" />
 </ItemGroup>
 ```
 
@@ -60,6 +61,24 @@ app.Run();
 ```
 
 Call `AddValidation()` in each endpoint/DTO assembly to generate validation metadata for its DTO properties. `AddHttp` registers the shared validation services.
+
+## Current User
+
+Version 5 requires `PANiXiDA.Core.Application` 5. `AddHttp` registers a scoped
+`ICurrentUser` from `PANiXiDA.Core.Application.Authentication.Abstractions` and
+`IHttpContextAccessor`, preserving an existing `ICurrentUser` registration.
+
+The adapter reads the first authenticated identity in `HttpContext.User`. Without
+one, it exposes an anonymous caller with no claims or permissions. `UserId` parses
+`sub` (or `ClaimTypes.NameIdentifier` when `sub` is absent) as a GUID. `UserName`
+uses the configured name claim type, falling back to `name`; roles use the configured
+role claim type and `role`. `TryGetClaimValue<T>` parses the first matching claim
+with invariant culture. Permission checks match individual `permission` values
+exactly and never derive permissions from roles or UI sections.
+
+The host must configure authentication and run it before invoking handlers. This
+adapter does not validate tokens. Background consumers must supply their own
+`ICurrentUser` when using handlers that require authorization.
 
 ## Forwarded Headers
 
