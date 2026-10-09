@@ -4,6 +4,8 @@ using Microsoft.Extensions.Logging;
 using PANiXiDA.Core.Presentation.Http.Middlewares;
 using PANiXiDA.Core.Presentation.Http.UnitTests.Support;
 
+using System.Security.Claims;
+
 namespace PANiXiDA.Core.Presentation.Http.UnitTests.Middlewares;
 
 public sealed class LoggingMiddlewareTests
@@ -104,6 +106,37 @@ public sealed class LoggingMiddlewareTests
         scopeValues["user_agent.original"].ShouldBe(string.Empty);
         scopeValues.ContainsKey("TraceId").ShouldBeFalse();
         scopeValues.ContainsKey("SpanId").ShouldBeFalse();
+    }
+
+    [Theory(DisplayName = "InvokeAsync retains the authenticated user after the request context changes")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task InvokeAsync_ShouldRetainAuthenticatedUserWhenRequestContextChanges(bool throwException)
+    {
+        var logger = new TestLogger<LoggingMiddleware>();
+        var httpContext = TestHttpContextFactory.CreateMinimalHttpContext();
+        Task next(HttpContext context)
+        {
+            context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", "authenticated-user")]));
+            return throwException
+                ? Task.FromException(new InvalidOperationException("Request failed"))
+                : Task.CompletedTask;
+        }
+
+        var middleware = new LoggingMiddleware(next, logger);
+
+        if (throwException)
+        {
+            await Should.ThrowAsync<InvalidOperationException>(() => middleware.InvokeAsync(httpContext));
+        }
+        else
+        {
+            await middleware.InvokeAsync(httpContext);
+        }
+
+        httpContext.User = new ClaimsPrincipal();
+        var scopeValues = FindScope(logger, "http.request.method");
+        scopeValues["enduser.id"].ShouldBe("authenticated-user");
     }
 
     private static IReadOnlyDictionary<string, object?> FindScope(

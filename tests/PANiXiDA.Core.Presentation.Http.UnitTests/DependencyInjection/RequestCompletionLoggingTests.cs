@@ -75,11 +75,16 @@ public sealed class RequestCompletionLoggingTests
         await using var app = builder.Build();
         app.Use(async (context, next) =>
         {
-            context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "user-42")], "test"));
             await next(context);
             completed.SetResult();
         });
         app.UseHttp();
+        app.Use(async (context, next) =>
+        {
+            context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", "user-42")], "test"));
+            context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("AuthenticatedRequest").LogInformation("Authenticated request");
+            await next(context);
+        });
         app.MapGet("/throw", (HttpContext context) =>
         {
             context.RequestAborted = requestAbortedToken;
@@ -126,6 +131,9 @@ public sealed class RequestCompletionLoggingTests
             record.Attributes.Single(pair => pair.Key == "client.address").Value.ShouldBe("127.0.0.1");
             record.Attributes.Single(pair => pair.Key == "user_agent.original").Value.ShouldBe("UnitTest");
         }
+
+        var authenticated = provider.Records.Single(record => record.Category == "AuthenticatedRequest");
+        authenticated.Attributes.Single(pair => pair.Key == "enduser.id").Value.ShouldBe("user-42");
     }
 
     public enum ExceptionKind

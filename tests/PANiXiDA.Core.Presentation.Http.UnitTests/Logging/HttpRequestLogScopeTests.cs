@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Http;
 
+using System.Security.Claims;
+
 using PANiXiDA.Core.Presentation.Http.Logging;
 using PANiXiDA.Core.Presentation.Http.UnitTests.Support;
 
@@ -7,6 +9,68 @@ namespace PANiXiDA.Core.Presentation.Http.UnitTests.Logging;
 
 public sealed class HttpRequestLogScopeTests
 {
+    [Theory(DisplayName = "Create uses the authenticated subject with a NameIdentifier fallback")]
+    [InlineData("subject-id", "mapped-id", "subject-id")]
+    [InlineData("subject-id", null, "subject-id")]
+    [InlineData(null, "mapped-id", "mapped-id")]
+    [InlineData(null, null, null)]
+    public void Create_ShouldResolveUserId(string? subject, string? nameIdentifier, string? expected)
+    {
+        var context = new DefaultHttpContext();
+        var claims = new List<Claim>();
+        if (subject is not null)
+        {
+            claims.Add(new Claim("sub", subject));
+        }
+
+        if (nameIdentifier is not null)
+        {
+            claims.Add(new Claim(ClaimTypes.NameIdentifier, nameIdentifier));
+        }
+
+        context.User = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
+
+        var scope = HttpRequestLogScope.Create(context);
+
+        scope["enduser.id"].ShouldBe(expected);
+        scope.Single(pair => pair.Key == "enduser.id").Value.ShouldBe(expected);
+    }
+
+    [Fact(DisplayName = "Request scope observes authentication after scope creation")]
+    public void Create_ShouldObserveAuthenticationAfterScopeCreation()
+    {
+        var context = new DefaultHttpContext();
+        var scope = HttpRequestLogScope.Create(context);
+        scope["enduser.id"].ShouldBeNull();
+
+        context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", "authenticated-user")], "test"));
+
+        scope["enduser.id"].ShouldBe("authenticated-user");
+        scope.Single(pair => pair.Key == "enduser.id").Value.ShouldBe("authenticated-user");
+    }
+
+    [Fact(DisplayName = "Completed request scope retains the user after the HTTP context is reused")]
+    public void Complete_ShouldRetainUserAfterHttpContextChanges()
+    {
+        var context = TestHttpContextFactory.CreateHttpContext();
+        var scope = HttpRequestLogScope.Create(context);
+        context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", "authenticated-user")], "test"));
+
+        scope.Complete();
+        context.User = new ClaimsPrincipal();
+        scope.Complete();
+
+        scope["enduser.id"].ShouldBe("authenticated-user");
+        scope.TryGetValue("enduser.id", out var userId).ShouldBeTrue();
+        userId.ShouldBe("authenticated-user");
+        scope.Single(pair => pair.Key == "enduser.id").Value.ShouldBe("authenticated-user");
+        scope.Values.ShouldContain("authenticated-user");
+        scope.ContainsKey("missing").ShouldBeFalse();
+        scope.TryGetValue("missing", out _).ShouldBeFalse();
+        scope.TryGetValue("http.request.method", out var method).ShouldBeTrue();
+        method.ShouldBe(HttpMethods.Post);
+    }
+
     [Fact(DisplayName = "Create returns the centralized HTTP request log attributes")]
     public void Create_ShouldReturnHttpRequestLogAttributes()
     {

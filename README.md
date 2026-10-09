@@ -109,8 +109,8 @@ including `UseLocalServer` in an Identity host.
 builder.Services.AddHttp(builder.Configuration);
 
 var app = builder.Build();
-app.UseHttp();
 app.UseRouting();
+app.UseHttp();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -312,6 +312,8 @@ In `Development`, error `ProblemDetails` responses include the exception message
 
 HTTP completion logs include the final status and request context: 4xx (including 499) are `Warning`, 5xx are `Error`, and other responses are `Information`. Exceptions handled by this package are attached to the completion log with their stack trace. Client aborts handled directly by ASP.NET Core (`OperationCanceledException`, including `TaskCanceledException`, or `IOException`) have no exception attached to the completion log. Exception handlers only produce the HTTP response.
 
+Place `UseHttp` before authentication and authorization so their failures are handled too. Request scopes include the authenticated `sub` claim, falling back to `NameIdentifier`, even when authentication runs after logging begins.
+
 | Error type | HTTP status | Title |
 | --- | ---: | --- |
 | `Validation` | 400 | `One or more validation errors occurred.` |
@@ -482,9 +484,9 @@ Place required middleware (HTTPS/HSTS, forwarded headers, error handling) before
 app.UseForwardedHeaders();
 app.UseHttpsRedirection();
 app.UseRouting();
+app.UseHttp();
 app.UseAuthentication();
 app.UseAuthorization();
-app.UseHttp();
 ```
 
 With `CreateSlimBuilder`, also call `builder.WebHost.UseStaticWebAssets()` in `Development` before `Build()`.
