@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 
+using OpenIddict.Abstractions;
+
 using System.Security.Claims;
 
 namespace PANiXiDA.Core.Presentation.Http.Logging;
@@ -43,7 +45,7 @@ internal static class HttpRequestLogScope
         var claims = httpContext.User.Identities
             .Where(identity => identity.IsAuthenticated)
             .SelectMany(identity => identity.Claims);
-        var userId = claims.FirstOrDefault(claim => claim.Type == "sub")
+        var userId = claims.FirstOrDefault(claim => claim.Type == OpenIddictConstants.Claims.Subject)
             ?? claims.FirstOrDefault(claim => claim.Type == ClaimTypes.NameIdentifier);
 
         return new Dictionary<string, object?>
