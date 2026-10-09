@@ -6,6 +6,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi;
 
+using OpenIddict.Validation.AspNetCore;
+
 using PANiXiDA.Core.Presentation.Http.Configurations;
 
 namespace PANiXiDA.Core.Presentation.Http.Transformers;
@@ -85,7 +87,8 @@ internal sealed class BearerSecurityOpenApiOperationTransformer(
         }
 
         return schemes.Any(scheme =>
-            scheme is SchemeName or BearerTokenDefaults.AuthenticationScheme ||
+            scheme is SchemeName or BearerTokenDefaults.AuthenticationScheme or
+                OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme ||
             configuration.Value.BearerAuthenticationSchemes.Contains(scheme, StringComparer.Ordinal));
     }
 }

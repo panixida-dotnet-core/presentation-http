@@ -1,7 +1,10 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
+using PANiXiDA.Core.Application.Authentication.Abstractions;
+using PANiXiDA.Core.Presentation.Http.Authentication;
 using PANiXiDA.Core.Presentation.Http.Configurations;
 using PANiXiDA.Core.Presentation.Http.Endpoints;
 using PANiXiDA.Core.Presentation.Http.Middlewares;
@@ -21,7 +24,7 @@ public static class ServiceCollectionExtensions
     /// Registers the default HTTP presentation services, including strict JSON contracts, API versioning, OpenAPI, validation, Problem Details, exception handling, health checks, and forwarded headers.
     /// </summary>
     /// <param name="services">The application service collection.</param>
-    /// <param name="configuration">The application configuration. The standard <c>ForwardedHeaders</c> section is used when present.</param>
+    /// <param name="configuration">The application configuration. The <c>ForwardedHeaders</c> section configures proxy headers; <c>OpenIddictValidationOptions</c> enables Bearer token introspection when present.</param>
     /// <returns>The original service collection for further configuration.</returns>
     [RequiresUnreferencedCode(ApiVersioningConfiguration.TrimmingMessage)]
     public static IServiceCollection AddHttp(
@@ -35,7 +38,7 @@ public static class ServiceCollectionExtensions
     /// Registers the default HTTP presentation services with strict JSON contracts and separate OpenAPI documents for each module and API version.
     /// </summary>
     /// <param name="services">The application service collection.</param>
-    /// <param name="configuration">The application configuration. Module document names and titles are read from the <c>HttpModules</c> section by presentation assembly name.</param>
+    /// <param name="configuration">The application configuration. <c>HttpModules</c> defines module documents by assembly name; <c>OpenIddictValidationOptions</c> enables Bearer token introspection when present.</param>
     /// <param name="moduleAssemblies">The presentation assemblies to map and document per API version. Modules with only unversioned endpoints use a common document.</param>
     /// <returns>The original service collection for further configuration.</returns>
     [RequiresUnreferencedCode(ApiVersioningConfiguration.TrimmingMessage)]
@@ -58,6 +61,9 @@ public static class ServiceCollectionExtensions
         var moduleRegistry = new HttpModuleRegistry(configuration, moduleAssemblies);
 
         services.AddSingleton(moduleRegistry);
+        services.AddHttpContextAccessor();
+        services.TryAddScoped<ICurrentUser, HttpCurrentUser>();
+        services.AddAuthenticationConfiguration(configuration);
         services.AddForwardedHeadersConfiguration(configuration);
         services.AddApiVersioningConfiguration();
         services.AddJsonConfiguration();
