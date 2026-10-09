@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
 
 using System.Security.Claims;
-using System.Collections;
 
 using PANiXiDA.Core.Presentation.Http.Logging;
 using PANiXiDA.Core.Presentation.Http.UnitTests.Support;
@@ -11,12 +10,12 @@ namespace PANiXiDA.Core.Presentation.Http.UnitTests.Logging;
 
 public sealed class HttpRequestLogScopeTests
 {
-    [Theory(DisplayName = "Create uses the authenticated subject with a NameIdentifier fallback")]
+    [Theory(DisplayName = "User scope uses the authenticated subject with a NameIdentifier fallback")]
     [InlineData("subject-id", "mapped-id", "subject-id")]
     [InlineData("subject-id", null, "subject-id")]
     [InlineData(null, "mapped-id", "mapped-id")]
     [InlineData(null, null, null)]
-    public void Create_ShouldResolveUserId(string? subject, string? nameIdentifier, string? expected)
+    public void CreateUser_ShouldResolveUserId(string? subject, string? nameIdentifier, string? expected)
     {
         var context = new DefaultHttpContext();
         var claims = new List<Claim> { new(ClaimTypes.Name, "display-name") };
@@ -24,25 +23,25 @@ public sealed class HttpRequestLogScopeTests
         {
             claims.Add(new Claim("sub", subject));
         }
-
         if (nameIdentifier is not null)
         {
             claims.Add(new Claim(ClaimTypes.NameIdentifier, nameIdentifier));
         }
-
         context.User = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
 
-        var scope = HttpRequestLogScope.Create(context);
+        var scope = HttpRequestLogScope.CreateUser(context);
 
+        scope.ShouldHaveSingleItem().Key.ShouldBe("enduser.id");
         scope["enduser.id"].ShouldBe(expected);
-        scope.Single(pair => pair.Key == "enduser.id").Value.ShouldBe(expected);
+        context.User = new ClaimsPrincipal();
+        scope["enduser.id"].ShouldBe(expected);
     }
 
-    [Theory(DisplayName = "Request scope ignores claims from unauthenticated identities")]
+    [Theory(DisplayName = "User scope ignores claims from unauthenticated identities")]
     [InlineData(false, false, null)]
     [InlineData(true, false, "authenticated-user")]
     [InlineData(true, true, "authenticated-user")]
-    public void Create_ShouldIgnoreUnauthenticatedIdentityClaims(bool includeAuthenticatedIdentity, bool useSubject, string? expected)
+    public void CreateUser_ShouldIgnoreUnauthenticatedIdentityClaims(bool includeAuthenticatedIdentity, bool useSubject, string? expected)
     {
         var principal = new ClaimsPrincipal(new ClaimsIdentity([
             new Claim("sub", "untrusted-subject"),
@@ -52,71 +51,34 @@ public sealed class HttpRequestLogScopeTests
             principal.AddIdentity(new ClaimsIdentity([
                 new Claim(useSubject ? "sub" : ClaimTypes.NameIdentifier, "authenticated-user")], "test"));
         }
-
         var context = new DefaultHttpContext { User = principal };
-        var scope = HttpRequestLogScope.Create(context);
 
-        scope["enduser.id"].ShouldBe(expected);
-        scope.Complete();
-        context.User = new ClaimsPrincipal();
+        var scope = HttpRequestLogScope.CreateUser(context);
+
         scope["enduser.id"].ShouldBe(expected);
     }
 
-    [Fact(DisplayName = "Request scope observes authentication after scope creation")]
-    public void Create_ShouldObserveAuthenticationAfterScopeCreation()
+    [Fact(DisplayName = "User scope is a snapshot and does not acquire a later authenticated identity")]
+    public void CreateUser_ShouldKeepPreviouslyCapturedIdentity()
     {
         var context = new DefaultHttpContext();
-        var scope = HttpRequestLogScope.Create(context);
-        scope["enduser.id"].ShouldBeNull();
+        var beforeAuthentication = HttpRequestLogScope.CreateUser(context);
 
         context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", "authenticated-user")], "test"));
-
-        scope["enduser.id"].ShouldBe("authenticated-user");
-        scope.Single(pair => pair.Key == "enduser.id").Value.ShouldBe("authenticated-user");
-    }
-
-    [Fact(DisplayName = "Completed request scope retains the user after the HTTP context is reused")]
-    public void Complete_ShouldRetainUserAfterHttpContextChanges()
-    {
-        var context = TestHttpContextFactory.CreateHttpContext();
-        var scope = HttpRequestLogScope.Create(context);
-        context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", "authenticated-user")], "test"));
-
-        scope.Complete();
+        var afterAuthentication = HttpRequestLogScope.CreateUser(context);
         context.User = new ClaimsPrincipal();
-        scope.Complete();
 
-        scope["enduser.id"].ShouldBe("authenticated-user");
-        scope.TryGetValue("enduser.id", out var userId).ShouldBeTrue();
-        userId.ShouldBe("authenticated-user");
-        scope.Single(pair => pair.Key == "enduser.id").Value.ShouldBe("authenticated-user");
-        scope.Values.ShouldContain("authenticated-user");
-        var untypedAttributes = new List<KeyValuePair<string, object?>>();
-        foreach (KeyValuePair<string, object?> attribute in (IEnumerable)scope)
-        {
-            untypedAttributes.Add(attribute);
-        }
-
-        untypedAttributes.ShouldBe(scope);
-        scope.ContainsKey("missing").ShouldBeFalse();
-        scope.TryGetValue("missing", out _).ShouldBeFalse();
-        scope.TryGetValue("http.request.method", out var method).ShouldBeTrue();
-        method.ShouldBe(HttpMethods.Post);
+        beforeAuthentication["enduser.id"].ShouldBeNull();
+        afterAuthentication["enduser.id"].ShouldBe("authenticated-user");
     }
 
-    [Theory(DisplayName = "Request scope observes routing and retains endpoint metadata after exception handling")]
+    [Theory(DisplayName = "Endpoint scope snapshots the selected endpoint including handled exceptions")]
     [InlineData(false)]
     [InlineData(true)]
-    public void Create_ShouldObserveEndpointSelectedAfterScopeCreation(bool exceptionHandled)
+    public void CreateEndpoint_ShouldRetainEndpointMetadata(bool exceptionHandled)
     {
         var context = TestHttpContextFactory.CreateHttpContext();
         var endpoint = context.GetEndpoint();
-        context.SetEndpoint(null);
-        var scope = HttpRequestLogScope.Create(context);
-        scope["http.route"].ShouldBeNull();
-        scope["aspnetcore.endpoint.display_name"].ShouldBeNull();
-
-        context.SetEndpoint(endpoint);
         if (exceptionHandled)
         {
             context.Features.Set<IExceptionHandlerFeature>(new ExceptionHandlerFeature
@@ -127,32 +89,47 @@ public sealed class HttpRequestLogScopeTests
             context.SetEndpoint(null);
         }
 
-        scope["http.route"].ShouldBe("/orders");
-        scope.TryGetValue("aspnetcore.endpoint.display_name", out var displayName).ShouldBeTrue();
-        displayName.ShouldBe("Test endpoint");
-        scope.Complete();
+        var scope = HttpRequestLogScope.CreateEndpoint(context);
         context.SetEndpoint(null);
         context.Features.Set<IExceptionHandlerFeature>(null);
+
+        scope.Count.ShouldBe(2);
         scope["http.route"].ShouldBe("/orders");
         scope["aspnetcore.endpoint.display_name"].ShouldBe("Test endpoint");
     }
 
-    [Fact(DisplayName = "Create returns the centralized HTTP request log attributes")]
+    [Theory(DisplayName = "Endpoint scope supports an unmatched request or a non-route endpoint")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CreateEndpoint_ShouldSupportMissingRoute(bool hasEndpoint)
+    {
+        var context = new DefaultHttpContext();
+        if (hasEndpoint)
+        {
+            context.SetEndpoint(new Endpoint(null, EndpointMetadataCollection.Empty, "Plain endpoint"));
+        }
+
+        var scope = HttpRequestLogScope.CreateEndpoint(context);
+
+        scope["http.route"].ShouldBeNull();
+        scope["aspnetcore.endpoint.display_name"].ShouldBe(hasEndpoint ? "Plain endpoint" : null);
+    }
+
+    [Fact(DisplayName = "Request scope snapshots the base HTTP attributes")]
     public void Create_ShouldReturnHttpRequestLogAttributes()
     {
         var httpContext = TestHttpContextFactory.CreateHttpContext();
         httpContext.Request.QueryString = new QueryString("?status=active");
 
         var scope = HttpRequestLogScope.Create(httpContext);
+        httpContext.Request.Path = "/changed";
+        httpContext.Request.QueryString = QueryString.Empty;
 
-        scope.Count.ShouldBe(9);
+        scope.Count.ShouldBe(6);
         scope["network.protocol.name"].ShouldBe("http");
         scope["http.request.method"].ShouldBe(HttpMethods.Post);
         scope["url.path"].ShouldBe("/orders");
         scope["url.query"].ShouldBe("?status=active");
-        scope["http.route"].ShouldBe("/orders");
-        scope["aspnetcore.endpoint.display_name"].ShouldBe("Test endpoint");
-        scope["enduser.id"].ShouldBe("user-id");
         scope["client.address"].ShouldBe("127.0.0.1");
         scope["user_agent.original"].ShouldBe("UnitTest");
         scope.ContainsKey("TraceIdentifier").ShouldBeFalse();
@@ -160,14 +137,21 @@ public sealed class HttpRequestLogScopeTests
         scope.ContainsKey("SpanId").ShouldBeFalse();
     }
 
-    [Fact(DisplayName = "Create rejects a null HTTP context")]
+    [Fact(DisplayName = "Request scope rejects a null HTTP context")]
     public void Create_ShouldRejectNullHttpContext()
     {
-        var exception = Should.Throw<ArgumentNullException>(() =>
-        {
-            HttpRequestLogScope.Create(null!);
-        });
+        Should.Throw<ArgumentNullException>(() => HttpRequestLogScope.Create(null!)).ParamName.ShouldBe("httpContext");
+    }
 
-        exception.ParamName.ShouldBe("httpContext");
+    [Fact(DisplayName = "Endpoint scope rejects a null HTTP context")]
+    public void CreateEndpoint_ShouldRejectNullHttpContext()
+    {
+        Should.Throw<ArgumentNullException>(() => HttpRequestLogScope.CreateEndpoint(null!)).ParamName.ShouldBe("httpContext");
+    }
+
+    [Fact(DisplayName = "User scope rejects a null HTTP context")]
+    public void CreateUser_ShouldRejectNullHttpContext()
+    {
+        Should.Throw<ArgumentNullException>(() => HttpRequestLogScope.CreateUser(null!)).ParamName.ShouldBe("httpContext");
     }
 }

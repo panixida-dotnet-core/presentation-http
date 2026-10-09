@@ -37,10 +37,7 @@ public sealed class LoggingMiddlewareTests
         logEntry.Message.ShouldBe("HTTP request finished");
         logEntry.Exception.ShouldBeNull();
 
-        var requestScope = FindScope(logger, "http.request.method");
-        var responseScope = FindScope(logger, "http.response.status_code");
-
-        var scopeValues = requestScope;
+        var scopeValues = GetScopeAttributes(logger);
         scopeValues["network.protocol.name"].ShouldBe("http");
         scopeValues["http.request.method"].ShouldBe(HttpMethods.Post);
         scopeValues["url.path"].ShouldBe("/orders");
@@ -54,8 +51,8 @@ public sealed class LoggingMiddlewareTests
         scopeValues.ContainsKey("TraceId").ShouldBeFalse();
         scopeValues.ContainsKey("SpanId").ShouldBeFalse();
 
-        responseScope["http.response.status_code"].ShouldBe(statusCode);
-        responseScope["http.server.request.duration_ms"].ShouldBeAssignableTo<double>();
+        scopeValues["http.response.status_code"].ShouldBe(statusCode);
+        scopeValues["http.server.request.duration_ms"].ShouldBeAssignableTo<double>();
     }
 
     [Fact(DisplayName = "InvokeAsync logs request completion when the next middleware throws")]
@@ -97,7 +94,7 @@ public sealed class LoggingMiddlewareTests
 
         await middleware.InvokeAsync(httpContext);
 
-        var scopeValues = FindScope(logger, "http.request.method");
+        var scopeValues = GetScopeAttributes(logger);
 
         scopeValues["http.route"].ShouldBeNull();
         scopeValues["aspnetcore.endpoint.display_name"].ShouldBeNull();
@@ -135,16 +132,14 @@ public sealed class LoggingMiddlewareTests
         }
 
         httpContext.User = new ClaimsPrincipal();
-        var scopeValues = FindScope(logger, "http.request.method");
+        var scopeValues = GetScopeAttributes(logger);
         scopeValues["enduser.id"].ShouldBe("authenticated-user");
     }
 
-    private static IReadOnlyDictionary<string, object?> FindScope(
-        TestLogger<LoggingMiddleware> logger,
-        string key)
+    private static Dictionary<string, object?> GetScopeAttributes(TestLogger<LoggingMiddleware> logger)
     {
         return logger.Scopes
-            .Select(scope => scope.ShouldBeAssignableTo<IReadOnlyDictionary<string, object?>>()!)
-            .Single(scope => scope.ContainsKey(key));
+            .SelectMany(scope => scope.ShouldBeAssignableTo<IReadOnlyDictionary<string, object?>>()!)
+            .ToDictionary();
     }
 }

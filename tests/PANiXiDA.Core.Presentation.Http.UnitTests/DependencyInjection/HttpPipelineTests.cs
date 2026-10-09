@@ -127,7 +127,9 @@ public sealed class HttpPipelineTests
             .Single(values => values.ContainsKey("http.route"));
         scope["http.route"].ShouldBe("/orders/{id}");
         scope["aspnetcore.endpoint.display_name"].ShouldBe("Read order");
-        scope["enduser.id"].ShouldBe(authenticated ? "subject-id" : null);
+        logger.Scopes.OfType<IReadOnlyDictionary<string, object?>>()
+            .Single(values => values.ContainsKey("enduser.id"))["enduser.id"]
+            .ShouldBe(authenticated ? "subject-id" : null);
         logger.Scopes.OfType<IReadOnlyDictionary<string, object?>>()
             .Single(values => values.ContainsKey("http.response.status_code"))["http.response.status_code"]
             .ShouldBe((int)expectedStatus);
@@ -284,7 +286,8 @@ public sealed class HttpPipelineTests
         var scope = logger.Scopes.OfType<IReadOnlyDictionary<string, object?>>()
             .Single(values => values.ContainsKey("http.route"));
         scope["http.route"].ShouldBe(useDefaultPolicy && preflight ? null : "/protected");
-        scope["url.path"].ShouldBe("/protected");
+        logger.Scopes.OfType<IReadOnlyDictionary<string, object?>>()
+            .Single(values => values.ContainsKey("url.path"))["url.path"].ShouldBe("/protected");
         response.Headers.GetValues("Access-Control-Allow-Origin").ShouldBe([origin]);
         if (preflight)
         {

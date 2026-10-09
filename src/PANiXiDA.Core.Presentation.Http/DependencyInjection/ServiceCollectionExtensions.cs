@@ -11,6 +11,7 @@ using PANiXiDA.Core.Application.Authentication.Abstractions;
 using PANiXiDA.Core.Presentation.Http.Authentication;
 using PANiXiDA.Core.Presentation.Http.Configurations;
 using PANiXiDA.Core.Presentation.Http.Endpoints;
+using PANiXiDA.Core.Presentation.Http.Logging;
 using PANiXiDA.Core.Presentation.Http.Middlewares;
 using PANiXiDA.Core.Presentation.Http.Modularity;
 
@@ -101,6 +102,13 @@ public static class ServiceCollectionExtensions
         app.UseExceptionHandler();
         app.UseHttpsRedirection();
         app.UseRouting();
+        app.Use(async (context, next) =>
+        {
+            using (app.Logger.BeginScope(HttpRequestLogScope.CreateEndpoint(context)))
+            {
+                await next(context);
+            }
+        });
 
         var serviceProviderIsService = app.Services.GetService<IServiceProviderIsService>();
         if (IsServiceRegistered<ICorsService>(app.Services, serviceProviderIsService))
@@ -113,6 +121,14 @@ public static class ServiceCollectionExtensions
         {
             app.UseAuthentication();
         }
+
+        app.Use(async (context, next) =>
+        {
+            using (app.Logger.BeginScope(HttpRequestLogScope.CreateUser(context)))
+            {
+                await next(context);
+            }
+        });
 
         if (IsServiceRegistered<IAuthorizationHandlerProvider>(app.Services, serviceProviderIsService))
         {

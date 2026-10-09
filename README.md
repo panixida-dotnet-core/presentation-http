@@ -315,7 +315,7 @@ In `Development`, error `ProblemDetails` responses include the exception message
 
 HTTP completion logs include the final status and request context: 4xx (including 499) are `Warning`, 5xx are `Error`, and other responses are `Information`. Exceptions handled by this package are attached to the completion log with their stack trace. Client aborts handled directly by ASP.NET Core (`OperationCanceledException`, including `TaskCanceledException`, or `IOException`) have no exception attached to the completion log. Exception handlers only produce the HTTP response.
 
-Completion logging also covers CORS preflight, authentication/authorization failures, and short-circuited endpoints. Request scopes retain the matched route, endpoint, and authenticated `sub` claim, falling back to `NameIdentifier`.
+Completion logging also covers CORS preflight, authentication/authorization failures, and short-circuited endpoints. Scopes capture the route after routing and the authenticated `sub` claim (falling back to `NameIdentifier`) after authentication. These snapshots stay unchanged during deferred log export; completion logs capture the final request context.
 
 | Error type | HTTP status | Title |
 | --- | ---: | --- |
