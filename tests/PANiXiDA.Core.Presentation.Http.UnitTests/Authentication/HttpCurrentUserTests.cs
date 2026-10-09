@@ -195,7 +195,7 @@ public sealed class HttpCurrentUserTests
         provider.GetRequiredService<ICurrentUser>().ShouldBeSameAs(currentUser);
     }
 
-    private static void AssertAnonymous(ICurrentUser user)
+    private static void AssertAnonymous(HttpCurrentUser user)
     {
         user.IsAuthenticated.ShouldBeFalse();
         user.UserId.ShouldBeNull();
