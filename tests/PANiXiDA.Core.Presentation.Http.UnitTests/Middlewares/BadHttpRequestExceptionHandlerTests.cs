@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 
 using PANiXiDA.Core.Presentation.Http.Middlewares;
 using PANiXiDA.Core.Presentation.Http.UnitTests.Support;
@@ -18,7 +17,6 @@ public sealed class BadHttpRequestExceptionHandlerTests
     {
         using var activity = new Activity("bad-http-request").Start();
 
-        var logger = new TestLogger<BadHttpRequestExceptionHandler>();
         var environment = new TestHostEnvironment
         {
             EnvironmentName = Environments.Development
@@ -29,7 +27,7 @@ public sealed class BadHttpRequestExceptionHandlerTests
         var exception = new BadHttpRequestException(
             "Failed to read the request body.",
             StatusCodes.Status400BadRequest);
-        var handler = new BadHttpRequestExceptionHandler(logger, environment);
+        var handler = new BadHttpRequestExceptionHandler(environment);
 
         var handled = await handler.TryHandleAsync(
             httpContext,
@@ -61,22 +59,14 @@ public sealed class BadHttpRequestExceptionHandlerTests
             .GetProperty("activityTraceId")
             .GetString()
             .ShouldBe(activity.TraceId.ToString());
-
-        var logEntry = logger.Entries.ShouldHaveSingleItem();
-        logEntry.LogLevel.ShouldBe(LogLevel.Warning);
-        logEntry.Exception.ShouldBeSameAs(exception);
-        logEntry.Message.ShouldBe("Invalid HTTP request");
-
-        logger.Scopes.ShouldBeEmpty();
     }
 
     [Fact(DisplayName = "TryHandleAsync ignores exceptions that are not bad HTTP requests")]
     public async Task TryHandleAsync_ShouldIgnoreOtherExceptions()
     {
-        var logger = new TestLogger<BadHttpRequestExceptionHandler>();
         var environment = new TestHostEnvironment();
         var httpContext = TestHttpContextFactory.CreateMinimalHttpContext();
-        var handler = new BadHttpRequestExceptionHandler(logger, environment);
+        var handler = new BadHttpRequestExceptionHandler(environment);
 
         var handled = await handler.TryHandleAsync(
             httpContext,
@@ -86,14 +76,11 @@ public sealed class BadHttpRequestExceptionHandlerTests
         handled.ShouldBeFalse();
         httpContext.Response.StatusCode.ShouldBe(StatusCodes.Status200OK);
         httpContext.Response.Body.Length.ShouldBe(0);
-        logger.Entries.ShouldBeEmpty();
-        logger.Scopes.ShouldBeEmpty();
     }
 
     [Fact(DisplayName = "TryHandleAsync hides bad request details outside Development")]
     public async Task TryHandleAsync_ShouldHideBadRequestDetailsOutsideDevelopment()
     {
-        var logger = new TestLogger<BadHttpRequestExceptionHandler>();
         var environment = new TestHostEnvironment
         {
             EnvironmentName = Environments.Production
@@ -101,7 +88,7 @@ public sealed class BadHttpRequestExceptionHandlerTests
 
         using var serviceProvider = CreateRequestServices();
         var httpContext = TestHttpContextFactory.CreateMinimalHttpContext(serviceProvider);
-        var handler = new BadHttpRequestExceptionHandler(logger, environment);
+        var handler = new BadHttpRequestExceptionHandler(environment);
 
         var handled = await handler.TryHandleAsync(
             httpContext,

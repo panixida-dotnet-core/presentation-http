@@ -17,7 +17,6 @@ public sealed class ExceptionHandlerTests
     {
         using var activity = new Activity("http-exception").Start();
 
-        var logger = new TestLogger<ExceptionHandler>();
         var environment = new TestHostEnvironment
         {
             EnvironmentName = Environments.Development
@@ -29,7 +28,7 @@ public sealed class ExceptionHandlerTests
         httpContext.Request.QueryString = new QueryString("?status=active");
 
         var exception = new InvalidOperationException("Development failure");
-        var handler = new ExceptionHandler(logger, environment);
+        var handler = new ExceptionHandler(environment);
 
         var handled = await handler.TryHandleAsync(httpContext, exception, CancellationToken.None);
 
@@ -58,13 +57,6 @@ public sealed class ExceptionHandlerTests
             .GetProperty("activityTraceId")
             .GetString()
             .ShouldBe(activity.TraceId.ToString());
-
-        var logEntry = logger.Entries.ShouldHaveSingleItem();
-        logEntry.LogLevel.ShouldBe(Microsoft.Extensions.Logging.LogLevel.Error);
-        logEntry.Exception.ShouldBeSameAs(exception);
-        logEntry.Message.ShouldBe("Unhandled HTTP exception");
-
-        logger.Scopes.ShouldBeEmpty();
     }
 
     [Fact(DisplayName = "TryHandleAsync hides exception details outside Development")]
@@ -72,7 +64,6 @@ public sealed class ExceptionHandlerTests
     {
         Activity.Current = null;
 
-        var logger = new TestLogger<ExceptionHandler>();
         var environment = new TestHostEnvironment
         {
             EnvironmentName = Environments.Production
@@ -80,7 +71,7 @@ public sealed class ExceptionHandlerTests
 
         using var serviceProvider = CreateRequestServices();
         var httpContext = TestHttpContextFactory.CreateMinimalHttpContext(serviceProvider);
-        var handler = new ExceptionHandler(logger, environment);
+        var handler = new ExceptionHandler(environment);
 
         var handled = await handler.TryHandleAsync(
             httpContext,
