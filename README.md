@@ -64,9 +64,9 @@ Call `AddValidation()` in each endpoint/DTO assembly to generate validation meta
 
 ## Current User
 
-Version 5 requires `PANiXiDA.Core.Application` 5. `AddHttp` registers a scoped
-`ICurrentUser` from `PANiXiDA.Core.Application.Authentication.Abstractions` and
-`IHttpContextAccessor`, preserving an existing `ICurrentUser` registration.
+`AddHttp` registers `IHttpContextAccessor` and a scoped `ICurrentUser` from
+`PANiXiDA.Core.Application.Authentication.Abstractions`, preserving an existing
+`ICurrentUser` registration. Inject `ICurrentUser` into application handlers.
 
 The adapter reads the first authenticated identity in `HttpContext.User`. Without
 one, it exposes an anonymous caller with no claims or permissions. `UserId` parses
@@ -74,12 +74,11 @@ one, it exposes an anonymous caller with no claims or permissions. `UserId` pars
 uses the configured name claim type, falling back to `name`; roles use the configured
 role claim type and `role`. `TryGetClaimValue<T>` parses the first matching claim
 with invariant culture and rejects a null `claimType` with `ArgumentNullException`.
-Permission checks match individual `permission` values
-exactly and never derive permissions from roles or UI sections.
+`HasPermission` matches individual `permission` values exactly; roles do not grant permissions.
 
-The host must configure authentication and run it before invoking handlers. This
-adapter does not validate tokens. Background consumers must supply their own
-`ICurrentUser` when using handlers that require authorization.
+Configure token validation and authentication in the host and run authentication
+before invoking handlers. Background consumers must supply their own `ICurrentUser`
+for handlers that require authorization.
 
 ## Forwarded Headers
 
