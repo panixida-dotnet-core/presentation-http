@@ -202,7 +202,7 @@ public sealed class TokenIntrospectionTests
             user.UserId,
             user.TryGetClaimValue<string>("sub", out var subject) ? subject : null,
             user.UserName,
-            user.Roles.ToArray(),
+            [.. user.Roles],
             user.HasPermission("tasks.read"))).RequireAuthorization();
         app.MapGet("/review", () => Results.Ok()).RequireAuthorization("review");
         app.MapGet("/admin", () => Results.Ok()).RequireAuthorization("admin");

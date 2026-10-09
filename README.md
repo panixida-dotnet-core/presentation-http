@@ -69,12 +69,14 @@ Call `AddValidation()` in each endpoint/DTO assembly to generate validation meta
 `PANiXiDA.Core.Application.Authentication.Abstractions`, preserving an existing
 `ICurrentUser` registration. Inject `ICurrentUser` into application handlers.
 
-The adapter reads the first authenticated identity in `HttpContext.User`. Without
-one, it exposes an anonymous caller with no claims or permissions. `UserId` parses
+The adapter combines claims from all authenticated identities in `HttpContext.User`,
+ignoring unauthenticated identities. Without an authenticated identity, it exposes
+an anonymous caller with no claims or permissions. `UserId` parses
 `sub` (or `ClaimTypes.NameIdentifier` when `sub` is absent) as a GUID. `UserName`
 uses the configured name claim type, falling back to `name`; roles use the configured
-role claim type and `role`. `TryGetClaimValue<T>` parses the first matching claim
-with invariant culture and rejects a null `claimType` with `ArgumentNullException`.
+role claim type and `role`, without duplicates. `TryGetClaimValue<T>` parses the first
+matching claim with invariant culture and exact claim-type matching. Null, empty,
+or whitespace `claimType` values return `false`.
 `HasPermission` matches individual `permission` values exactly; roles do not grant permissions.
 
 Configure token validation as described below or use the host's authentication.

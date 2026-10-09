@@ -12,36 +12,35 @@ namespace PANiXiDA.Core.Presentation.Http.Authentication;
 
 internal sealed class HttpCurrentUser(IHttpContextAccessor httpContextAccessor) : ICurrentUser
 {
-    private ClaimsIdentity? Identity => httpContextAccessor.HttpContext?.User.Identities
-        .FirstOrDefault(identity => identity.IsAuthenticated);
+    private IEnumerable<ClaimsIdentity> Identities => httpContextAccessor.HttpContext?.User.Identities
+        .Where(identity => identity.IsAuthenticated) ?? [];
 
-    public bool IsAuthenticated => Identity is not null;
+    private IEnumerable<Claim> Claims => Identities.SelectMany(identity => identity.Claims);
+
+    public bool IsAuthenticated => Identities.Any();
 
     public Guid? UserId
     {
         get
         {
-            var identity = Identity;
-            var claim = identity?.FindFirst("sub") ?? identity?.FindFirst(ClaimTypes.NameIdentifier);
+            var claim = Claims.FirstOrDefault(claim => claim.Type == "sub")
+                ?? Claims.FirstOrDefault(claim => claim.Type == ClaimTypes.NameIdentifier);
 
             return Guid.TryParse(claim?.Value, out var userId) ? userId : null;
         }
     }
 
-    public string? UserName => Identity?.Name ?? Identity?.FindFirst("name")?.Value;
+    public string? UserName => Identities
+        .Select(identity => identity.Name ?? identity.FindFirst("name")?.Value)
+        .FirstOrDefault(name => name is not null);
 
     public IReadOnlyCollection<string> Roles
     {
         get
         {
-            var identity = Identity;
-            if (identity is null)
-            {
-                return [];
-            }
-
-            return [.. identity.Claims
-                .Where(claim => claim.Type == identity.RoleClaimType || claim.Type == "role")
+            return [.. Identities
+                .SelectMany(identity => identity.Claims
+                    .Where(claim => claim.Type == identity.RoleClaimType || claim.Type == "role"))
                 .Select(claim => claim.Value)
                 .Distinct(StringComparer.Ordinal)];
         }
@@ -50,9 +49,9 @@ internal sealed class HttpCurrentUser(IHttpContextAccessor httpContextAccessor) 
     public bool TryGetClaimValue<T>(string claimType, [MaybeNullWhen(false)] out T value)
         where T : IParsable<T>
     {
-        ArgumentNullException.ThrowIfNull(claimType);
-
-        var claim = Identity?.FindFirst(claimType);
+        var claim = string.IsNullOrWhiteSpace(claimType)
+            ? null
+            : Claims.FirstOrDefault(claim => claim.Type == claimType);
         if (claim is not null && T.TryParse(claim.Value, CultureInfo.InvariantCulture, out value))
         {
             return true;
@@ -64,7 +63,7 @@ internal sealed class HttpCurrentUser(IHttpContextAccessor httpContextAccessor) 
 
     public bool HasPermission(string permission)
     {
-        return !string.IsNullOrWhiteSpace(permission) && Identity?.Claims.Any(claim =>
-            claim.Type == ApplicationClaimTypes.Permission && claim.Value == permission) == true;
+        return !string.IsNullOrWhiteSpace(permission) && Claims.Any(claim =>
+            claim.Type == ApplicationClaimTypes.Permission && claim.Value == permission);
     }
 }

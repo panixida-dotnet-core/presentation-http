@@ -96,29 +96,55 @@ public sealed class HttpCurrentUserTests
         user.Roles.ShouldBeEmpty();
     }
 
-    [Fact(DisplayName = "Current user never combines claims from different identities")]
-    public void CurrentUser_ShouldUseFirstAuthenticatedIdentity()
+    [Fact(DisplayName = "Current user combines claims from all authenticated identities")]
+    public void CurrentUser_ShouldCombineAuthenticatedIdentities()
     {
         var userId = Guid.NewGuid();
         var user = CreateUser(
-            new ClaimsIdentity([new Claim("sub", Guid.NewGuid().ToString())]),
-            new ClaimsIdentity([new Claim("sub", userId.ToString())], "Bearer"),
-            new ClaimsIdentity([new Claim(ApplicationClaimTypes.Permission, "files.create")], "Other"));
+            new ClaimsIdentity([
+                new Claim("sub", Guid.NewGuid().ToString()),
+                new Claim("name", "untrusted"),
+                new Claim("role", "admin"),
+                new Claim(ApplicationClaimTypes.Permission, "files.delete")]),
+            new ClaimsIdentity([
+                new Claim("sub", userId.ToString()),
+                new Claim("role", "reader"),
+                new Claim("count", "invalid")], "Bearer"),
+            new ClaimsIdentity([
+                new Claim("sub", Guid.NewGuid().ToString()),
+                new Claim("name", "alice"),
+                new Claim("role", "reader"),
+                new Claim("custom_role", "editor"),
+                new Claim("count", "42"),
+                new Claim("amount", "1.5"),
+                new Claim(ApplicationClaimTypes.Permission, "files.create")], "Other", "name", "custom_role"));
 
+        user.IsAuthenticated.ShouldBeTrue();
         user.UserId.ShouldBe(userId);
-        user.HasPermission("files.create").ShouldBeFalse();
+        user.UserName.ShouldBe("alice");
+        user.Roles.ShouldBe(["reader", "editor"]);
+        user.HasPermission("files.create").ShouldBeTrue();
+        user.HasPermission("files.delete").ShouldBeFalse();
+        user.TryGetClaimValue<int>("count", out var count).ShouldBeFalse();
+        count.ShouldBe(0);
+        user.TryGetClaimValue<decimal>("amount", out var amount).ShouldBeTrue();
+        amount.ShouldBe(1.5m);
+        user.TryGetClaimValue<string>("SUB", out _).ShouldBeFalse();
     }
 
-    [Theory(DisplayName = "Null claim types are rejected regardless of authentication state")]
-    [InlineData(null)]
-    [InlineData("Bearer")]
-    public void TryGetClaimValue_ShouldRejectNullClaimType(string? authenticationType)
+    [Theory(DisplayName = "Empty claim types return false regardless of authentication state")]
+    [InlineData(null, null)]
+    [InlineData(null, "")]
+    [InlineData(null, " \t")]
+    [InlineData("Bearer", null)]
+    [InlineData("Bearer", "")]
+    [InlineData("Bearer", " \t")]
+    public void TryGetClaimValue_ShouldRejectEmptyClaimType(string? authenticationType, string? claimType)
     {
-        var user = CreateUser(new ClaimsIdentity(authenticationType));
+        var user = CreateUser(new ClaimsIdentity([new Claim(" \t", "42")], authenticationType));
 
-        var exception = Should.Throw<ArgumentNullException>(() => user.TryGetClaimValue<Guid>(null!, out _));
-
-        exception.ParamName.ShouldBe("claimType");
+        user.TryGetClaimValue<int>(claimType!, out var value).ShouldBeFalse();
+        value.ShouldBe(0);
     }
 
     [Fact(DisplayName = "Claim parsing uses invariant culture and only the first matching claim")]

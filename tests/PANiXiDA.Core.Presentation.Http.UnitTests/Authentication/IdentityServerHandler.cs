@@ -14,6 +14,10 @@ internal sealed class IdentityServerHandler : HttpClientHandler
     internal const string ClientSecret = "test-secret";
     internal static readonly Guid UserId = Guid.Parse("01992746-2c04-7f48-b5a0-c42487c72453");
 
+    private static readonly string[] IntrospectionAuthenticationMethods = ["client_secret_post"];
+    private static readonly string[] Roles = ["Worker", "Reviewer"];
+    private static readonly string[] Permissions = ["tasks.read", "tasks.comment"];
+
     internal List<string> IntrospectedTokens { get; } = [];
 
     internal bool IsRevoked { get; set; }
@@ -29,7 +33,7 @@ internal sealed class IdentityServerHandler : HttpClientHandler
                 issuer = Issuer,
                 jwks_uri = Issuer + ".well-known/jwks",
                 introspection_endpoint = Issuer + "connect/introspect",
-                introspection_endpoint_auth_methods_supported = new[] { "client_secret_post" }
+                introspection_endpoint_auth_methods_supported = IntrospectionAuthenticationMethods
             });
         }
 
@@ -66,8 +70,8 @@ internal sealed class IdentityServerHandler : HttpClientHandler
             aud = token == "wrong-audience" ? "another-api" : Audience,
             sub = token == "service" ? "background-worker" : UserId.ToString(),
             name = "Test User",
-            role = new[] { "Worker", "Reviewer" },
-            permission = new[] { "tasks.read", "tasks.comment" },
+            role = Roles,
+            permission = Permissions,
             scope = "tasks.read tasks.comment",
             client_id = "test-web",
             token_type = "Bearer",
