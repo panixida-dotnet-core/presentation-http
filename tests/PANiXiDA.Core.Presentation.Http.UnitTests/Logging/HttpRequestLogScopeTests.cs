@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http;
 
 using System.Security.Claims;
+using System.Collections;
 
 using PANiXiDA.Core.Presentation.Http.Logging;
 using PANiXiDA.Core.Presentation.Http.UnitTests.Support;
@@ -65,6 +66,7 @@ public sealed class HttpRequestLogScopeTests
         userId.ShouldBe("authenticated-user");
         scope.Single(pair => pair.Key == "enduser.id").Value.ShouldBe("authenticated-user");
         scope.Values.ShouldContain("authenticated-user");
+        ((IEnumerable)scope).Cast<KeyValuePair<string, object?>>().ToArray().ShouldBe(scope.ToArray());
         scope.ContainsKey("missing").ShouldBeFalse();
         scope.TryGetValue("missing", out _).ShouldBeFalse();
         scope.TryGetValue("http.request.method", out var method).ShouldBeTrue();
