@@ -28,6 +28,18 @@ public sealed class RequestCompletionLoggingTests
     [InlineData(true, ExceptionKind.ApplicationFailure, StatusCodes.Status500InternalServerError, LogLevel.Error)]
     [InlineData(false, ExceptionKind.ApplicationFailure, StatusCodes.Status500InternalServerError, LogLevel.Error)]
     [InlineData(false, ExceptionKind.BadRequest, StatusCodes.Status400BadRequest, LogLevel.Warning)]
+    [InlineData(true, ExceptionKind.CancellationAggregate, StatusCodes.Status499ClientClosedRequest, LogLevel.Warning)]
+    [InlineData(false, ExceptionKind.CancellationAggregate, StatusCodes.Status500InternalServerError, LogLevel.Error)]
+    [InlineData(true, ExceptionKind.NestedCancellationAggregate, StatusCodes.Status499ClientClosedRequest, LogLevel.Warning)]
+    [InlineData(false, ExceptionKind.NestedCancellationAggregate, StatusCodes.Status500InternalServerError, LogLevel.Error)]
+    [InlineData(true, ExceptionKind.MixedAggregate, StatusCodes.Status500InternalServerError, LogLevel.Error)]
+    [InlineData(true, ExceptionKind.ReversedMixedAggregate, StatusCodes.Status500InternalServerError, LogLevel.Error)]
+    [InlineData(true, ExceptionKind.NestedMixedAggregate, StatusCodes.Status500InternalServerError, LogLevel.Error)]
+    [InlineData(true, ExceptionKind.EmptyAggregate, StatusCodes.Status500InternalServerError, LogLevel.Error)]
+    [InlineData(true, ExceptionKind.NestedEmptyAggregate, StatusCodes.Status500InternalServerError, LogLevel.Error)]
+    [InlineData(true, ExceptionKind.WrappedCancellation, StatusCodes.Status500InternalServerError, LogLevel.Error)]
+    [InlineData(true, ExceptionKind.WrappedCancellationAggregate, StatusCodes.Status500InternalServerError, LogLevel.Error)]
+    [InlineData(true, ExceptionKind.ConnectionFailureAggregate, StatusCodes.Status500InternalServerError, LogLevel.Error)]
     public async Task UseHttp_ShouldLogHandledExceptionOnceWithFinalStatusAndRequestScope(
         bool requestAborted,
         ExceptionKind exceptionKind,
@@ -43,6 +55,16 @@ public sealed class RequestCompletionLoggingTests
             ExceptionKind.TaskCancellation => new TaskCanceledException("Request canceled", null, requestAbortedToken),
             ExceptionKind.ConnectionFailure => new IOException("Connection closed"),
             ExceptionKind.BadRequest => new BadHttpRequestException("Invalid request"),
+            ExceptionKind.CancellationAggregate => new AggregateException(new OperationCanceledException(requestAbortedToken), new TaskCanceledException()),
+            ExceptionKind.NestedCancellationAggregate => new AggregateException(new TaskCanceledException(), new AggregateException(new OperationCanceledException(requestAbortedToken))),
+            ExceptionKind.MixedAggregate => new AggregateException(new TaskCanceledException(), new InvalidOperationException("Independent failure")),
+            ExceptionKind.ReversedMixedAggregate => new AggregateException(new InvalidOperationException("Independent failure"), new TaskCanceledException()),
+            ExceptionKind.NestedMixedAggregate => new AggregateException(new TaskCanceledException(), new AggregateException(new OperationCanceledException(), new InvalidOperationException("Independent failure"))),
+            ExceptionKind.EmptyAggregate => new AggregateException(),
+            ExceptionKind.NestedEmptyAggregate => new AggregateException(new TaskCanceledException(), new AggregateException()),
+            ExceptionKind.WrappedCancellation => new InvalidOperationException("Wrapper", new TaskCanceledException()),
+            ExceptionKind.WrappedCancellationAggregate => new AggregateException(new TaskCanceledException(), new InvalidOperationException("Wrapper", new TaskCanceledException())),
+            ExceptionKind.ConnectionFailureAggregate => new AggregateException(new TaskCanceledException(), new IOException("Connection closed")),
             _ => new InvalidOperationException("Independent application failure")
         };
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = Environments.Production });
@@ -81,7 +103,8 @@ public sealed class RequestCompletionLoggingTests
         var records = provider.Records.Where(record => record.Category.StartsWith("PANiXiDA.Core.Presentation.Http.", StringComparison.Ordinal)).ToArray();
         records.ShouldHaveSingleItem().ShouldBeSameAs(completion);
         provider.Records.Count(record => record.Level >= LogLevel.Error).ShouldBe(expectedLevel == LogLevel.Error ? 1 : 0);
-        if (expectedStatus == StatusCodes.Status499ClientClosedRequest)
+        if (expectedStatus == StatusCodes.Status499ClientClosedRequest
+            && exception is OperationCanceledException or IOException)
         {
             completion.Exception.ShouldBeNull();
         }
@@ -111,7 +134,17 @@ public sealed class RequestCompletionLoggingTests
         TaskCancellation,
         ConnectionFailure,
         ApplicationFailure,
-        BadRequest
+        BadRequest,
+        CancellationAggregate,
+        NestedCancellationAggregate,
+        MixedAggregate,
+        ReversedMixedAggregate,
+        NestedMixedAggregate,
+        EmptyAggregate,
+        NestedEmptyAggregate,
+        WrappedCancellation,
+        WrappedCancellationAggregate,
+        ConnectionFailureAggregate
     }
 
     private sealed class CapturingLoggerProvider : ILoggerProvider, ISupportExternalScope

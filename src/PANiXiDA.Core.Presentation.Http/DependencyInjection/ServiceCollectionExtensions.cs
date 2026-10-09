@@ -69,6 +69,7 @@ public static class ServiceCollectionExtensions
         services.AddJsonConfiguration();
         services.AddOpenApiConfiguration(configuration, moduleRegistry.Modules);
         services.AddProblemDetailsConfiguration();
+        services.AddExceptionHandler<ClientAbortedExceptionHandler>();
         services.AddExceptionHandler<BadHttpRequestExceptionHandler>();
         services.AddExceptionHandler<ExceptionHandler>();
         services.AddValidation();
