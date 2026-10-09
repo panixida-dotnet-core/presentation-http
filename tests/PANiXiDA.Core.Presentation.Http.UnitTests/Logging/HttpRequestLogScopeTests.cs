@@ -96,7 +96,7 @@ public sealed class HttpRequestLogScopeTests
             untypedAttributes.Add(attribute);
         }
 
-        untypedAttributes.ToArray().ShouldBe(scope.ToArray());
+        untypedAttributes.ShouldBe(scope);
         scope.ContainsKey("missing").ShouldBeFalse();
         scope.TryGetValue("missing", out _).ShouldBeFalse();
         scope.TryGetValue("http.request.method", out var method).ShouldBeTrue();
