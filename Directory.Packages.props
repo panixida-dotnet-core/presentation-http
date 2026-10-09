@@ -11,7 +11,9 @@
         <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.11.2" />
         <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.4.1" />
         <PackageVersion Include="Nerdbank.GitVersioning" Version="3.10.94" />
-        <PackageVersion Include="PANiXiDA.Core.Application" Version="4.0.3" />
+        <PackageVersion Include="OpenIddict.Validation.AspNetCore" Version="7.7.1" />
+        <PackageVersion Include="OpenIddict.Validation.SystemNetHttp" Version="7.7.1" />
+        <PackageVersion Include="PANiXiDA.Core.Application" Version="5.0.1" />
         <PackageVersion Include="PANiXiDA.Core.ResultPattern" Version="1.0.4" />
         <PackageVersion Include="Scalar.AspNetCore" Version="2.17.10" />
         <PackageVersion Include="Scalar.AspNetCore.Microsoft" Version="2.17.10" />

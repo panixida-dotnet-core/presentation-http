@@ -4,6 +4,8 @@ using Microsoft.Extensions.Logging;
 using PANiXiDA.Core.Presentation.Http.Middlewares;
 using PANiXiDA.Core.Presentation.Http.UnitTests.Support;
 
+using System.Security.Claims;
+
 namespace PANiXiDA.Core.Presentation.Http.UnitTests.Middlewares;
 
 public sealed class LoggingMiddlewareTests
@@ -11,6 +13,7 @@ public sealed class LoggingMiddlewareTests
     [Theory(DisplayName = "InvokeAsync writes the expected log level by response status")]
     [InlineData(StatusCodes.Status204NoContent, LogLevel.Information)]
     [InlineData(StatusCodes.Status404NotFound, LogLevel.Warning)]
+    [InlineData(StatusCodes.Status499ClientClosedRequest, LogLevel.Warning)]
     [InlineData(StatusCodes.Status500InternalServerError, LogLevel.Error)]
     public async Task InvokeAsync_ShouldWriteExpectedLogLevelByStatusCode(
         int statusCode,
@@ -32,6 +35,7 @@ public sealed class LoggingMiddlewareTests
         var logEntry = logger.Entries.ShouldHaveSingleItem();
         logEntry.LogLevel.ShouldBe(expectedLogLevel);
         logEntry.Message.ShouldBe("HTTP request finished");
+        logEntry.Exception.ShouldBeNull();
 
         var requestScope = FindScope(logger, "http.request.method");
         var responseScope = FindScope(logger, "http.response.status_code");
@@ -102,6 +106,37 @@ public sealed class LoggingMiddlewareTests
         scopeValues["user_agent.original"].ShouldBe(string.Empty);
         scopeValues.ContainsKey("TraceId").ShouldBeFalse();
         scopeValues.ContainsKey("SpanId").ShouldBeFalse();
+    }
+
+    [Theory(DisplayName = "InvokeAsync retains the authenticated user after the request context changes")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task InvokeAsync_ShouldRetainAuthenticatedUserWhenRequestContextChanges(bool throwException)
+    {
+        var logger = new TestLogger<LoggingMiddleware>();
+        var httpContext = TestHttpContextFactory.CreateMinimalHttpContext();
+        Task next(HttpContext context)
+        {
+            context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", "authenticated-user")], "test"));
+            return throwException
+                ? Task.FromException(new InvalidOperationException("Request failed"))
+                : Task.CompletedTask;
+        }
+
+        var middleware = new LoggingMiddleware(next, logger);
+
+        if (throwException)
+        {
+            await Should.ThrowAsync<InvalidOperationException>(() => middleware.InvokeAsync(httpContext));
+        }
+        else
+        {
+            await middleware.InvokeAsync(httpContext);
+        }
+
+        httpContext.User = new ClaimsPrincipal();
+        var scopeValues = FindScope(logger, "http.request.method");
+        scopeValues["enduser.id"].ShouldBe("authenticated-user");
     }
 
     private static IReadOnlyDictionary<string, object?> FindScope(

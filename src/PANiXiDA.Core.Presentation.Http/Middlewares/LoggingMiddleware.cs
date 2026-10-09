@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 
@@ -14,8 +15,9 @@ internal sealed class LoggingMiddleware(
     public async Task InvokeAsync(HttpContext httpContext)
     {
         var startedAt = Stopwatch.GetTimestamp();
+        var requestScope = HttpRequestLogScope.Create(httpContext);
 
-        using (logger.BeginScope(HttpRequestLogScope.Create(httpContext)))
+        using (logger.BeginScope(requestScope))
         {
             try
             {
@@ -23,6 +25,7 @@ internal sealed class LoggingMiddleware(
             }
             finally
             {
+                requestScope.Complete();
                 var elapsed = Stopwatch.GetElapsedTime(startedAt);
                 var logLevel = GetLogLevel(httpContext.Response.StatusCode);
 
@@ -34,7 +37,10 @@ internal sealed class LoggingMiddleware(
                         ["http.server.request.duration_ms"] = elapsed.TotalMilliseconds,
                     }))
                     {
-                        logger.Log(logLevel, "HTTP request finished");
+                        logger.Log(
+                            logLevel,
+                            httpContext.Features.Get<IExceptionHandlerFeature>()?.Error,
+                            "HTTP request finished");
                     }
                 }
             }

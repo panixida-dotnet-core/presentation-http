@@ -15,6 +15,8 @@ It provides common Minimal API endpoint conventions, API versioning, OpenAPI set
 ## Features
 
 - `AddHttp` registers the default HTTP presentation services.
+- `ICurrentUser` exposes the authenticated HTTP caller to Application handlers.
+- Optional OpenIddict introspection validates Bearer access tokens through Identity.
 - `UseHttp` adds the default middleware pipeline and maps source-generated endpoint registrations.
 - HTTP JSON contracts enforce required constructor parameters, nullable annotations, and strict number handling.
 - Module assemblies can be mapped to separate OpenAPI documents and Scalar sources for each API version through the `HttpModules` configuration section.
@@ -61,11 +63,73 @@ app.Run();
 
 Call `AddValidation()` in each endpoint/DTO assembly to generate validation metadata for its DTO properties. `AddHttp` registers the shared validation services.
 
-`UseHttp` configures forwarded headers → exception handling → HTTPS redirection → routing → CORS → authentication/authorization → request logging.
+`UseHttp` configures forwarded headers → request logging → exception handling → HTTPS redirection → routing → CORS → authentication → authorization.
 CORS, authentication and authorization middleware are enabled independently when their services are registered. The host configures schemes and policies with `AddCors`, `AddAuthentication` and `AddAuthorization`; CORS uses the default policy or endpoint policies.
 If the DI provider does not expose `IServiceProviderIsService`, `UseHttp` detects these services by resolving them in temporary scopes at startup.
 
-When upgrading to 5.x, remove separate `UseRouting`, `UseCors`, `UseAuthentication`, and `UseAuthorization` calls, along with duplicated forwarded headers, exception handling, and HTTPS redirection calls. Review custom middleware placement around `UseHttp`.
+Do not register routing, CORS, authentication or authorization middleware separately from `UseHttp`.
+
+## Current User
+
+`AddHttp` registers `IHttpContextAccessor` and a scoped `ICurrentUser` from
+`PANiXiDA.Core.Application.Authentication.Abstractions`, preserving an existing
+`ICurrentUser` registration. Inject `ICurrentUser` into application handlers.
+
+The adapter combines claims from all authenticated identities in `HttpContext.User`,
+ignoring unauthenticated identities. Without an authenticated identity, it exposes
+an anonymous caller with no claims or permissions. `UserId` parses
+`sub` (or `ClaimTypes.NameIdentifier` when `sub` is absent) as a GUID. `UserName`
+uses the configured name claim type, falling back to `name`; roles use the configured
+role claim type and `role`, without duplicates. `TryGetClaimValue<T>` parses the first
+matching claim with invariant culture and exact claim-type matching. Null, empty,
+or whitespace `claimType` values return `false`.
+`HasPermission` matches individual `permission` values exactly; roles do not grant permissions.
+
+Configure token validation as described below or use the host's authentication.
+Run authentication before invoking handlers. Background consumers must supply their
+own `ICurrentUser` for handlers that require authorization.
+
+## Token Validation
+
+`AddHttp` enables OpenIddict introspection when `OpenIddictValidationOptions` is present:
+
+```json
+{
+  "OpenIddictValidationOptions": {
+    "Issuer": "https://identity.example.com/",
+    "Audiences": ["panixida-api"],
+    "ClientId": "panixida-api"
+  }
+}
+```
+
+Supply `OpenIddictValidationOptions:ClientSecret` from your secret store.
+Register this confidential client in Identity with introspection permission.
+For OpenIddict Identity, include its `ClientId` in the token's audiences so introspection
+returns user claims. `ValidateOnStart()` runs OpenIddict's built-in configuration checks.
+Use an HTTPS issuer and configure `Audiences` to restrict token recipients; an empty list
+disables audience validation. Without this section, `AddHttp` preserves host authentication,
+including `UseLocalServer` in an Identity host.
+
+```csharp
+builder.Services.AddHttp(builder.Configuration);
+
+var app = builder.Build();
+app.UseHttp();
+
+app.MapGet("/protected", () => Results.Ok()).RequireAuthorization();
+app.Run();
+```
+
+Send `Authorization: Bearer <access_token>`. Discovery locates Identity's introspection
+endpoint; each authenticated request checks token activity, expiry, and configured audiences.
+Revoked tokens are rejected on the next request. Cookie, query, and form tokens are ignored.
+Invalid tokens return 401, failed policies return 403, and Identity failures deny access.
+Public endpoints remain public. Identity availability affects authenticated requests.
+
+Use roles and policies for endpoint access, or `IRequireAuthorization` on Application handlers.
+Tokens from `client_credentials` may have a string `sub`: `ICurrentUser.UserId` is then null;
+read the subject with `TryGetClaimValue<string>("sub", out var subject)`.
 
 ## Forwarded Headers
 
@@ -245,8 +309,13 @@ public static IResult CreateOrder()
 ## HTTP Error Mapping
 
 Invalid HTTP requests represented by `BadHttpRequestException`, including JSON body binding failures, preserve their framework status code and are mapped to `ProblemDetails`.
-Other unhandled exceptions are mapped to status 500 in every environment.
-In `Development`, both responses include the exception message in `detail`.
+Client aborts (`OperationCanceledException` or `IOException` with a canceled `RequestAborted`) use status 499 if the response has not started. Other unhandled exceptions use status 500.
+Nonempty `AggregateException` trees containing only `OperationCanceledException` (including `TaskCanceledException`) also use 499 when `RequestAborted` is canceled and the response has not started. Empty or mixed aggregates and unknown wrappers remain errors.
+In `Development`, error `ProblemDetails` responses include the exception message in `detail`.
+
+HTTP completion logs include the final status and request context: 4xx (including 499) are `Warning`, 5xx are `Error`, and other responses are `Information`. Exceptions handled by this package are attached to the completion log with their stack trace. Client aborts handled directly by ASP.NET Core (`OperationCanceledException`, including `TaskCanceledException`, or `IOException`) have no exception attached to the completion log. Exception handlers only produce the HTTP response.
+
+Completion logging also covers CORS preflight, authentication/authorization failures, and short-circuited endpoints. Request scopes retain the matched route, endpoint, and authenticated `sub` claim, falling back to `NameIdentifier`.
 
 | Error type | HTTP status | Title |
 | --- | ---: | --- |
@@ -299,15 +368,14 @@ When the resulting policy does not select authentication schemes, the default au
 is used. `AllowAnonymous` endpoints are excluded. Cookie-only policies and other unmapped schemes
 do not receive a Bearer requirement, even when Bearer is the host's default scheme.
 
-The standard scheme names `Bearer` and `BearerToken` are recognized by convention.
+The standard schemes `Bearer`, `BearerToken`, and `OpenIddict.Validation.AspNetCore` are recognized automatically.
 Declare additional Bearer scheme names in `ScalarConfiguration:BearerAuthenticationSchemes`.
-For an OpenIddict host using validation for API requests and the server handler for UserInfo:
+For an OpenIddict host using the server handler for UserInfo:
 
 ```json
 {
   "ScalarConfiguration": {
     "BearerAuthenticationSchemes": [
-      "OpenIddict.Validation.AspNetCore",
       "OpenIddict.Server.AspNetCore"
     ]
   }
@@ -413,7 +481,7 @@ If either value is missing or blank, Scalar keeps its corresponding default.
 Place local icons in the host's `wwwroot` (`Microsoft.NET.Sdk.Web`).
 In `Development`, a nonblank `Favicon` makes `UseHttp` call `MapStaticAssets().ShortCircuit()` for all host assets.
 These assets must be public: middleware after routing, including authorization and CORS, is skipped.
-`UseHttp` ensures forwarded headers, exception handling, and HTTPS redirection run before static assets.
+`UseHttp` ensures forwarded headers, request logging, exception handling, and HTTPS redirection run before static assets.
 Host-specific middleware needed for assets must run before `UseHttp`; for HSTS behind a proxy, call `UseForwardedHeaders()` then `UseHsts()` before it.
 
 With `CreateSlimBuilder`, also call `builder.WebHost.UseStaticWebAssets()` in `Development` before `Build()`.

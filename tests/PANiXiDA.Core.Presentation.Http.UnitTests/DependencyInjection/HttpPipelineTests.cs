@@ -17,6 +17,7 @@ using PANiXiDA.Core.Presentation.Http.UnitTests.Support;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Claims;
+using System.Text.Encodings.Web;
 
 namespace PANiXiDA.Core.Presentation.Http.UnitTests.DependencyInjection;
 
@@ -85,7 +86,7 @@ public sealed class HttpPipelineTests
     [InlineData(false, false, HttpStatusCode.Unauthorized)]
     [InlineData(true, false, HttpStatusCode.Forbidden)]
     [InlineData(true, true, HttpStatusCode.OK)]
-    public async Task UseHttp_ShouldAuthorizeBeforeRequestLogging(
+    public async Task UseHttp_ShouldLogFinalAuthorizationResult(
         bool authenticated,
         bool hasPermission,
         HttpStatusCode expectedStatus)
@@ -98,6 +99,7 @@ public sealed class HttpPipelineTests
         builder.Services.AddSingleton<ILogger<LoggingMiddleware>>(logger);
 
         await using var app = builder.Build();
+        var completed = ObserveCompletion(app);
         app.UseHttp();
         app.MapGet("/orders/{id}", (int id, HttpContext context) => TypedResults.Text(
                 $"{id}:{context.User.FindFirstValue(ClaimTypes.NameIdentifier)}"))
@@ -111,43 +113,109 @@ public sealed class HttpPipelineTests
         }
 
         using var response = await client.GetAsync("/orders/42", TestContext.Current.CancellationToken);
+        await completed.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
         response.StatusCode.ShouldBe(expectedStatus);
         if (expectedStatus == HttpStatusCode.OK)
         {
             (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).ShouldBe("42:user-id");
-            logger.Entries.ShouldHaveSingleItem();
-            var scope = logger.Scopes.OfType<IReadOnlyDictionary<string, object?>>()
-                .Single(values => values.ContainsKey("http.route"));
-            scope["http.route"].ShouldBe("/orders/{id}");
-            scope["aspnetcore.endpoint.display_name"].ShouldBe("Read order");
-            scope["enduser.id"].ShouldBe("user-id");
+        }
+
+        var completion = logger.Entries.ShouldHaveSingleItem();
+        completion.LogLevel.ShouldBe(expectedStatus == HttpStatusCode.OK ? LogLevel.Information : LogLevel.Warning);
+        var scope = logger.Scopes.OfType<IReadOnlyDictionary<string, object?>>()
+            .Single(values => values.ContainsKey("http.route"));
+        scope["http.route"].ShouldBe("/orders/{id}");
+        scope["aspnetcore.endpoint.display_name"].ShouldBe("Read order");
+        scope["enduser.id"].ShouldBe(authenticated ? "subject-id" : null);
+        logger.Scopes.OfType<IReadOnlyDictionary<string, object?>>()
+            .Single(values => values.ContainsKey("http.response.status_code"))["http.response.status_code"]
+            .ShouldBe((int)expectedStatus);
+    }
+
+    [Theory(DisplayName = "UseHttp logs authentication and authorization failures once with the final status and route")]
+    [InlineData(true, true, FailureKind.BadRequest, 400, LogLevel.Warning)]
+    [InlineData(true, false, FailureKind.BadRequest, 400, LogLevel.Warning)]
+    [InlineData(false, true, FailureKind.BadRequest, 400, LogLevel.Warning)]
+    [InlineData(false, false, FailureKind.BadRequest, 400, LogLevel.Warning)]
+    [InlineData(true, true, FailureKind.ClientCancellation, 499, LogLevel.Warning)]
+    [InlineData(true, false, FailureKind.ClientCancellation, 499, LogLevel.Warning)]
+    [InlineData(false, true, FailureKind.ClientCancellation, 499, LogLevel.Warning)]
+    [InlineData(false, false, FailureKind.ClientCancellation, 499, LogLevel.Warning)]
+    [InlineData(true, true, FailureKind.CancellationAggregate, 499, LogLevel.Warning)]
+    [InlineData(true, false, FailureKind.CancellationAggregate, 499, LogLevel.Warning)]
+    [InlineData(false, true, FailureKind.CancellationAggregate, 499, LogLevel.Warning)]
+    [InlineData(false, false, FailureKind.CancellationAggregate, 499, LogLevel.Warning)]
+    [InlineData(true, true, FailureKind.IndependentCancellation, 500, LogLevel.Error)]
+    [InlineData(true, false, FailureKind.IndependentCancellation, 500, LogLevel.Error)]
+    [InlineData(false, true, FailureKind.IndependentCancellation, 500, LogLevel.Error)]
+    [InlineData(false, false, FailureKind.IndependentCancellation, 500, LogLevel.Error)]
+    [InlineData(true, true, FailureKind.ApplicationFailure, 500, LogLevel.Error)]
+    [InlineData(true, false, FailureKind.ApplicationFailure, 500, LogLevel.Error)]
+    [InlineData(false, true, FailureKind.ApplicationFailure, 500, LogLevel.Error)]
+    [InlineData(false, false, FailureKind.ApplicationFailure, 500, LogLevel.Error)]
+    public async Task UseHttp_ShouldLogAuthenticationAndAuthorizationFailures(
+        bool failAuthentication,
+        bool supportsIntrospection,
+        FailureKind failureKind,
+        int expectedStatus,
+        LogLevel expectedLevel)
+    {
+        var builder = CreateBuilder(supportsIntrospection);
+        var requestAborted = new CancellationToken(failureKind is FailureKind.ClientCancellation or FailureKind.CancellationAggregate or FailureKind.ApplicationFailure);
+        Exception exception = failureKind switch
+        {
+            FailureKind.BadRequest => new BadHttpRequestException("Unexpected end of request content."),
+            FailureKind.CancellationAggregate => new AggregateException(new TaskCanceledException("Request cancelled", null, requestAborted)),
+            FailureKind.ApplicationFailure => new InvalidOperationException("Independent authentication failure"),
+            _ => new TaskCanceledException("Request cancelled", null, requestAborted)
+        };
+        var logger = new TestLogger<LoggingMiddleware>();
+        builder.Services.AddSingleton<ILogger<LoggingMiddleware>>(logger);
+        if (failAuthentication)
+        {
+            builder.Services.AddSingleton(new RequestFailure(exception, requestAborted));
+            builder.Services.AddAuthentication("Failure")
+                .AddScheme<AuthenticationSchemeOptions, FailingAuthenticationHandler>("Failure", null);
         }
         else
         {
-            logger.Entries.ShouldBeEmpty();
+            builder.Services.AddAuthorizationBuilder().AddPolicy("Fail", policy => policy.RequireAssertion(bool (context) =>
+            {
+                ((HttpContext)context.Resource!).RequestAborted = requestAborted;
+                throw exception;
+            }));
         }
-    }
-
-    [Fact(DisplayName = "UseHttp handles authorization failures through Problem Details")]
-    public async Task UseHttp_ShouldHandleAuthorizationExceptions()
-    {
-        var builder = CreateBuilder();
-        builder.Services.AddAuthorizationBuilder().AddPolicy("Fail", policy => policy.RequireAssertion(
-            bool (_) => throw new InvalidOperationException("Authorization failed")));
 
         await using var app = builder.Build();
+        var completed = ObserveCompletion(app);
         app.UseHttp();
-        app.MapGet("/protected", () => TypedResults.Ok()).RequireAuthorization("Fail");
+        var endpoint = app.MapGet("/protected", () => TypedResults.Ok()).WithDisplayName("Protected endpoint");
+        if (!failAuthentication)
+        {
+            endpoint.RequireAuthorization("Fail");
+        }
         await app.StartAsync(TestContext.Current.CancellationToken);
         using var client = CreateClient(app);
 
         using var response = await client.GetAsync("/protected", TestContext.Current.CancellationToken);
+        await completed.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
-        response.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
-        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
-        (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))
-            .ShouldContain("Internal server error");
+        response.StatusCode.ShouldBe((HttpStatusCode)expectedStatus);
+        var completion = logger.Entries.ShouldHaveSingleItem();
+        completion.LogLevel.ShouldBe(expectedLevel);
+        completion.Exception.ShouldBeSameAs(failureKind == FailureKind.ClientCancellation ? null : exception);
+        var scope = logger.Scopes.OfType<IReadOnlyDictionary<string, object?>>()
+            .Single(values => values.ContainsKey("http.route"));
+        scope["http.route"].ShouldBe("/protected");
+        scope["aspnetcore.endpoint.display_name"].ShouldBe("Protected endpoint");
+        logger.Scopes.OfType<IReadOnlyDictionary<string, object?>>()
+            .Single(values => values.ContainsKey("http.response.status_code"))["http.response.status_code"]
+            .ShouldBe(expectedStatus);
+        if (expectedStatus != StatusCodes.Status499ClientClosedRequest)
+        {
+            response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        }
     }
 
     [Theory(DisplayName = "UseHttp applies default and endpoint CORS before authorization")]
@@ -172,6 +240,8 @@ public sealed class HttpPipelineTests
     {
         const string origin = "https://admin.example";
         var builder = CreateBuilder(supportsIntrospection);
+        var logger = new TestLogger<LoggingMiddleware>();
+        builder.Services.AddSingleton<ILogger<LoggingMiddleware>>(logger);
         builder.Services.AddCors(options =>
         {
             options.DefaultPolicyName = "DefaultBrowser";
@@ -183,6 +253,7 @@ public sealed class HttpPipelineTests
         builder.Services.AddAuthorizationBuilder().AddPolicy("Admin", policy => policy.RequireRole("Admin"));
 
         await using var app = builder.Build();
+        var completed = ObserveCompletion(app);
         app.UseHttp();
         var endpoint = app.MapGet("/protected", () => TypedResults.Ok()).RequireAuthorization("Admin");
         if (!useDefaultPolicy)
@@ -206,8 +277,14 @@ public sealed class HttpPipelineTests
         }
 
         using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+        await completed.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
         response.StatusCode.ShouldBe(expectedStatus);
+        logger.Entries.ShouldHaveSingleItem().LogLevel.ShouldBe(preflight ? LogLevel.Information : LogLevel.Warning);
+        var scope = logger.Scopes.OfType<IReadOnlyDictionary<string, object?>>()
+            .Single(values => values.ContainsKey("http.route"));
+        scope["http.route"].ShouldBe(useDefaultPolicy && preflight ? null : "/protected");
+        scope["url.path"].ShouldBe("/protected");
         response.Headers.GetValues("Access-Control-Allow-Origin").ShouldBe([origin]);
         if (preflight)
         {
@@ -279,6 +356,101 @@ public sealed class HttpPipelineTests
         publicResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
+    [Theory(DisplayName = "UseHttp logs redirects and short-circuited endpoints with the final status")]
+    [InlineData(204, LogLevel.Information)]
+    [InlineData(307, LogLevel.Information)]
+    [InlineData(400, LogLevel.Warning)]
+    [InlineData(499, LogLevel.Warning)]
+    [InlineData(500, LogLevel.Error)]
+    public async Task UseHttp_ShouldLogShortCircuitedRequests(int expectedStatus, LogLevel expectedLevel)
+    {
+        var builder = CreateBuilder();
+        builder.Services.AddHttpsRedirection(options => options.HttpsPort = 8443);
+        var logger = new TestLogger<LoggingMiddleware>();
+        builder.Services.AddSingleton<ILogger<LoggingMiddleware>>(logger);
+
+        await using var app = builder.Build();
+        var completed = ObserveCompletion(app);
+        app.UseHttp();
+        app.Use((context, next) =>
+        {
+            context.Response.Headers["X-After-Routing"] = "executed";
+            return next(context);
+        });
+        app.MapGet("/short", (HttpContext context) =>
+        {
+            if (expectedStatus == 400)
+            {
+                throw new BadHttpRequestException("Incomplete request body");
+            }
+            if (expectedStatus == 499)
+            {
+                context.RequestAborted = new CancellationToken(true);
+                throw new TaskCanceledException("Client aborted", null, context.RequestAborted);
+            }
+            if (expectedStatus == 500)
+            {
+                throw new InvalidOperationException("Independent failure");
+            }
+            return TypedResults.NoContent();
+        }).WithDisplayName("Short endpoint").ShortCircuit();
+        await app.StartAsync(TestContext.Current.CancellationToken);
+        using var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, UseProxy = false })
+        {
+            BaseAddress = new Uri(app.Urls.Single())
+        };
+        if (expectedStatus != 307)
+        {
+            client.DefaultRequestHeaders.Add("X-Forwarded-Proto", "https");
+        }
+
+        using var response = await client.GetAsync("/short", TestContext.Current.CancellationToken);
+        await completed.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe((HttpStatusCode)expectedStatus);
+        response.Headers.Contains("X-After-Routing").ShouldBeFalse();
+        logger.Entries.ShouldHaveSingleItem().LogLevel.ShouldBe(expectedLevel);
+        var scope = logger.Scopes.OfType<IReadOnlyDictionary<string, object?>>()
+            .Single(values => values.ContainsKey("http.route"));
+        scope["http.route"].ShouldBe(expectedStatus == 307 ? null : "/short");
+        scope["aspnetcore.endpoint.display_name"].ShouldBe(expectedStatus == 307 ? null : "Short endpoint");
+    }
+
+    public enum FailureKind
+    {
+        BadRequest,
+        ClientCancellation,
+        CancellationAggregate,
+        IndependentCancellation,
+        ApplicationFailure
+    }
+
+    private sealed record RequestFailure(Exception Exception, CancellationToken RequestAborted);
+
+    private sealed class FailingAuthenticationHandler(
+        IOptionsMonitor<AuthenticationSchemeOptions> options,
+        ILoggerFactory logger,
+        UrlEncoder encoder,
+        RequestFailure failure) : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
+    {
+        protected override Task<AuthenticateResult> HandleAuthenticateAsync()
+        {
+            Context.RequestAborted = failure.RequestAborted;
+            return Task.FromException<AuthenticateResult>(failure.Exception);
+        }
+    }
+
+    private static Task ObserveCompletion(WebApplication app)
+    {
+        var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        app.Use(async (context, next) =>
+        {
+            await next(context);
+            completed.SetResult();
+        });
+        return completed.Task;
+    }
+
     private static WebApplicationBuilder CreateBuilder(bool supportsIntrospection = true)
     {
         var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions
@@ -305,7 +477,7 @@ public sealed class HttpPipelineTests
 
     private static AuthenticationHeaderValue CreateAuthorizationHeader(WebApplication app, bool hasPermission = false)
     {
-        var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, "user-id") };
+        var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, "user-id"), new("sub", "subject-id") };
         if (hasPermission)
         {
             claims.Add(new Claim("permission", "orders.read"));
