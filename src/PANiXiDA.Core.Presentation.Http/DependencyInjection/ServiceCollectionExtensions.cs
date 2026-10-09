@@ -1,5 +1,3 @@
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.Extensions.Configuration;
@@ -26,7 +24,7 @@ namespace PANiXiDA.Core.Presentation.Http.DependencyInjection;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers the default HTTP presentation services, including strict JSON contracts, API versioning, OpenAPI, validation, Problem Details, exception handling, health checks, and forwarded headers.
+    /// Registers the default HTTP presentation services, including authentication, authorization, CORS, strict JSON contracts, API versioning, OpenAPI, validation, Problem Details, exception handling, health checks, and forwarded headers.
     /// </summary>
     /// <param name="services">The application service collection.</param>
     /// <param name="configuration">The application configuration. The <c>ForwardedHeaders</c> section configures proxy headers; <c>OpenIddictValidationOptions</c> enables Bearer token introspection when present.</param>
@@ -40,7 +38,7 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers the default HTTP presentation services with strict JSON contracts and separate OpenAPI documents for each module and API version.
+    /// Registers the default HTTP presentation services, including authentication, authorization and CORS, with strict JSON contracts and separate OpenAPI documents for each module and API version.
     /// </summary>
     /// <param name="services">The application service collection.</param>
     /// <param name="configuration">The application configuration. <c>HttpModules</c> defines module documents by assembly name; <c>OpenIddictValidationOptions</c> enables Bearer token introspection when present.</param>
@@ -68,6 +66,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(moduleRegistry);
         services.AddHttpContextAccessor();
         services.TryAddScoped<ICurrentUser, HttpCurrentUser>();
+        services.AddAuthentication();
+        services.AddAuthorization();
+        services.AddCors();
         services.AddAuthenticationConfiguration(configuration);
         services.AddForwardedHeadersConfiguration(configuration);
         services.AddApiVersioningConfiguration();
@@ -87,7 +88,7 @@ public static class ServiceCollectionExtensions
     /// Adds the HTTP presentation middleware and maps source-generated endpoint groups from the specified assemblies.
     /// </summary>
     /// <remarks>
-    /// Configures forwarded headers, request logging, exception handling, HTTPS redirection, routing, then registered CORS, authentication and authorization.
+    /// Configures forwarded headers, request logging, exception handling, HTTPS redirection, routing, CORS, authentication and authorization.
     /// CORS policies, authentication schemes and authorization policies must be registered by the host. Do not add routing, CORS or authentication/authorization middleware separately.
     /// </remarks>
     /// <param name="app">The ASP.NET Core application instance.</param>
@@ -110,17 +111,9 @@ public static class ServiceCollectionExtensions
             }
         });
 
-        var serviceProviderIsService = app.Services.GetService<IServiceProviderIsService>();
-        if (IsServiceRegistered<ICorsService>(app.Services, serviceProviderIsService))
-        {
-            var corsOptions = app.Services.GetRequiredService<IOptions<CorsOptions>>();
-            app.UseCors(corsOptions.Value.DefaultPolicyName);
-        }
-
-        if (IsServiceRegistered<IAuthenticationSchemeProvider>(app.Services, serviceProviderIsService))
-        {
-            app.UseAuthentication();
-        }
+        var corsOptions = app.Services.GetRequiredService<IOptions<CorsOptions>>();
+        app.UseCors(corsOptions.Value.DefaultPolicyName);
+        app.UseAuthentication();
 
         app.Use(async (context, next) =>
         {
@@ -130,11 +123,7 @@ public static class ServiceCollectionExtensions
             }
         });
 
-        if (IsServiceRegistered<IAuthorizationHandlerProvider>(app.Services, serviceProviderIsService))
-        {
-            app.UseAuthorization();
-        }
-
+        app.UseAuthorization();
         app.UseOpenApiConfiguration();
         app.MapHealthChecks("/health");
 
@@ -160,19 +149,5 @@ public static class ServiceCollectionExtensions
         }
 
         return app;
-    }
-
-    private static bool IsServiceRegistered<TService>(
-        IServiceProvider services,
-        IServiceProviderIsService? serviceProviderIsService)
-        where TService : class
-    {
-        if (serviceProviderIsService is not null)
-        {
-            return serviceProviderIsService.IsService(typeof(TService));
-        }
-
-        using var scope = services.CreateScope();
-        return scope.ServiceProvider.GetService<TService>() is not null;
     }
 }

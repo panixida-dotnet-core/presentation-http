@@ -39,7 +39,7 @@ public sealed class HttpPipelineTests
         (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).ShouldBe("Healthy");
     }
 
-    [Theory(DisplayName = "UseHttp supports independently registered authentication and authorization services")]
+    [Theory(DisplayName = "UseHttp supports both default and explicit host authentication and authorization registration")]
     [InlineData(false, false, true)]
     [InlineData(true, false, true)]
     [InlineData(false, true, true)]
@@ -48,7 +48,7 @@ public sealed class HttpPipelineTests
     [InlineData(true, false, false)]
     [InlineData(false, true, false)]
     [InlineData(true, true, false)]
-    public async Task UseHttp_ShouldSupportOptionalAuthenticationAndAuthorization(
+    public async Task UseHttp_ShouldSupportHostAuthenticationAndAuthorizationRegistration(
         bool registerAuthentication,
         bool registerAuthorization,
         bool supportsIntrospection)

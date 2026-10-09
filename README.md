@@ -64,8 +64,7 @@ app.Run();
 Call `AddValidation()` in each endpoint/DTO assembly to generate validation metadata for its DTO properties. `AddHttp` registers the shared validation services.
 
 `UseHttp` configures forwarded headers → request logging → exception handling → HTTPS redirection → routing → CORS → authentication → authorization.
-CORS, authentication and authorization middleware are enabled independently when their services are registered. The host configures schemes and policies with `AddCors`, `AddAuthentication` and `AddAuthorization`; CORS uses the default policy or endpoint policies.
-If the DI provider does not expose `IServiceProviderIsService`, `UseHttp` detects these services by resolving them in temporary scopes at startup.
+`AddHttp` registers the base CORS, authentication and authorization services; `UseHttp` always adds their middleware. The host configures schemes and policies with `AddCors`, `AddAuthentication` and `AddAuthorization`; CORS uses the default policy or endpoint policies.
 
 Do not register routing, CORS, authentication or authorization middleware separately from `UseHttp`.
 
@@ -388,8 +387,9 @@ handlers or forwarding selectors, and it does not generate documentation for Coo
 authentication. The Bearer component is added only to documents with matching operations, including
 versioned and unversioned module documents.
 
-The host must configure authentication, authorization services, and middleware. This configuration
-only maps authentication scheme names to OpenAPI Bearer security; it does not register handlers or
+The host configures authentication schemes and authorization policies; `AddHttp` and `UseHttp`
+provide the base services and middleware. The OpenAPI configuration only maps authentication
+scheme names to OpenAPI Bearer security; it does not register handlers or
 change server-side access checks. Both JWT and opaque tokens are supported without prescribing a
 token format.
 

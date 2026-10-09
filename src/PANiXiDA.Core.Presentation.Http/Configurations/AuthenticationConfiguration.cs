@@ -29,7 +29,6 @@ internal static class AuthenticationConfiguration
             .ValidateOnStart();
 
         services.AddAuthentication(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme);
-        services.AddAuthorization();
         services.AddOpenIddict()
             .AddValidation(options =>
             {

@@ -1,4 +1,7 @@
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
@@ -34,6 +37,81 @@ public sealed class ServiceCollectionExtensionsTests
         var result = services.AddHttp(configuration);
 
         result.ShouldBeSameAs(services);
+    }
+
+    [Theory(DisplayName = "AddHttp provides middleware services without configuring authentication schemes or host policies")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AddHttp_ShouldProvideMiddlewareServices(bool useModules)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        var configuration = new ConfigurationBuilder().Build();
+
+        if (useModules)
+        {
+            services.AddHttp(configuration, []);
+        }
+        else
+        {
+            services.AddHttp(configuration);
+        }
+
+        using var provider = services.BuildServiceProvider();
+        var schemes = provider.GetRequiredService<IAuthenticationSchemeProvider>();
+        var authorization = provider.GetRequiredService<IAuthorizationPolicyProvider>();
+        var cors = provider.GetRequiredService<ICorsPolicyProvider>();
+
+        (await schemes.GetAllSchemesAsync()).ShouldBeEmpty();
+        (await schemes.GetDefaultAuthenticateSchemeAsync()).ShouldBeNull();
+        (await authorization.GetFallbackPolicyAsync()).ShouldBeNull();
+        (await cors.GetPolicyAsync(new DefaultHttpContext(), null)).ShouldBeNull();
+    }
+
+    [Theory(DisplayName = "AddHttp preserves host authentication and policies regardless of registration order")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AddHttp_ShouldPreserveHostConfiguration(bool configureHostFirst)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        var configuration = new ConfigurationBuilder().Build();
+        var policy = new AuthorizationPolicyBuilder().RequireClaim("permission", "orders.read").Build();
+        var corsPolicy = new CorsPolicyBuilder().WithOrigins("https://admin.example").Build();
+
+        if (!configureHostFirst)
+        {
+            services.AddHttp(configuration);
+        }
+
+        services.AddAuthentication("Existing").AddCookie("Existing");
+        services.AddAuthorizationBuilder()
+            .SetDefaultPolicy(policy)
+            .SetFallbackPolicy(policy)
+            .AddPolicy("ReadOrders", policy);
+        services.AddCors(options =>
+        {
+            options.DefaultPolicyName = "Browser";
+            options.AddDefaultPolicy(corsPolicy);
+        });
+
+        if (configureHostFirst)
+        {
+            services.AddHttp(configuration);
+        }
+
+        using var provider = services.BuildServiceProvider();
+        var schemes = provider.GetRequiredService<IAuthenticationSchemeProvider>();
+        var authorization = provider.GetRequiredService<IAuthorizationPolicyProvider>();
+        var cors = provider.GetRequiredService<ICorsPolicyProvider>();
+
+        (await schemes.GetDefaultAuthenticateSchemeAsync()).ShouldNotBeNull().Name.ShouldBe("Existing");
+        (await schemes.GetAllSchemesAsync()).ShouldHaveSingleItem().Name.ShouldBe("Existing");
+        (await authorization.GetDefaultPolicyAsync()).ShouldBeSameAs(policy);
+        (await authorization.GetFallbackPolicyAsync()).ShouldBeSameAs(policy);
+        (await authorization.GetPolicyAsync("ReadOrders")).ShouldBeSameAs(policy);
+        provider.GetRequiredService<IOptions<CorsOptions>>().Value.DefaultPolicyName.ShouldBe("Browser");
+        (await cors.GetPolicyAsync(new DefaultHttpContext(), null)).ShouldBeSameAs(corsPolicy);
     }
 
     [Fact(DisplayName = "AddHttp applies ForwardedHeaders configuration")]
