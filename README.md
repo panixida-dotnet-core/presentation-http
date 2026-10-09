@@ -16,6 +16,7 @@ It provides common Minimal API endpoint conventions, API versioning, OpenAPI set
 
 - `AddHttp` registers the default HTTP presentation services.
 - `ICurrentUser` exposes the authenticated HTTP caller to Application handlers.
+- Optional OpenIddict introspection validates Bearer access tokens through Identity.
 - `UseHttp` adds the default middleware pipeline and maps source-generated endpoint registrations.
 - HTTP JSON contracts enforce required constructor parameters, nullable annotations, and strict number handling.
 - Module assemblies can be mapped to separate OpenAPI documents and Scalar sources for each API version through the `HttpModules` configuration section.
@@ -76,9 +77,53 @@ role claim type and `role`. `TryGetClaimValue<T>` parses the first matching clai
 with invariant culture and rejects a null `claimType` with `ArgumentNullException`.
 `HasPermission` matches individual `permission` values exactly; roles do not grant permissions.
 
-Configure token validation and authentication in the host and run authentication
-before invoking handlers. Background consumers must supply their own `ICurrentUser`
-for handlers that require authorization.
+Configure token validation as described below or use the host's authentication.
+Run authentication before invoking handlers. Background consumers must supply their
+own `ICurrentUser` for handlers that require authorization.
+
+## Token Validation
+
+`AddHttp` enables OpenIddict introspection when `OpenIddictValidationOptions` is present:
+
+```json
+{
+  "OpenIddictValidationOptions": {
+    "Issuer": "https://identity.example.com/",
+    "Audiences": ["panixida-api"],
+    "ClientId": "panixida-api"
+  }
+}
+```
+
+Supply `OpenIddictValidationOptions:ClientSecret` from your secret store.
+Register this confidential client in Identity with introspection permission.
+For OpenIddict Identity, include its `ClientId` in the token's audiences so introspection
+returns user claims. `Issuer` must use HTTPS and `Audiences` must contain non-empty values;
+invalid settings prevent startup. Without this section, `AddHttp` preserves host authentication,
+including `UseLocalServer` in an Identity host.
+
+```csharp
+builder.Services.AddHttp(builder.Configuration);
+
+var app = builder.Build();
+app.UseHttp();
+app.UseRouting();
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapGet("/protected", () => Results.Ok()).RequireAuthorization();
+app.Run();
+```
+
+Send `Authorization: Bearer <access_token>`. Discovery locates Identity's introspection
+endpoint; each authenticated request checks token activity, expiry, and audience.
+Revoked tokens are rejected on the next request. Cookie, query, and form tokens are ignored.
+Invalid tokens return 401, failed policies return 403, and Identity failures deny access.
+Public endpoints remain public. Identity availability affects authenticated requests.
+
+Use roles and policies for endpoint access, or `IRequireAuthorization` on Application handlers.
+Tokens from `client_credentials` may have a string `sub`: `ICurrentUser.UserId` is then null;
+read the subject with `TryGetClaimValue<string>("sub", out var subject)`.
 
 ## Forwarded Headers
 
@@ -314,15 +359,14 @@ When the resulting policy does not select authentication schemes, the default au
 is used. `AllowAnonymous` endpoints are excluded. Cookie-only policies and other unmapped schemes
 do not receive a Bearer requirement, even when Bearer is the host's default scheme.
 
-The standard scheme names `Bearer` and `BearerToken` are recognized by convention.
+The standard schemes `Bearer`, `BearerToken`, and `OpenIddict.Validation.AspNetCore` are recognized automatically.
 Declare additional Bearer scheme names in `ScalarConfiguration:BearerAuthenticationSchemes`.
-For an OpenIddict host using validation for API requests and the server handler for UserInfo:
+For an OpenIddict host using the server handler for UserInfo:
 
 ```json
 {
   "ScalarConfiguration": {
     "BearerAuthenticationSchemes": [
-      "OpenIddict.Validation.AspNetCore",
       "OpenIddict.Server.AspNetCore"
     ]
   }
