@@ -310,7 +310,7 @@ Client aborts (`OperationCanceledException` or `IOException` with a canceled `Re
 Nonempty `AggregateException` trees containing only `OperationCanceledException` (including `TaskCanceledException`) also use 499 when `RequestAborted` is canceled and the response has not started. Empty or mixed aggregates and unknown wrappers remain errors.
 In `Development`, error `ProblemDetails` responses include the exception message in `detail`.
 
-HTTP completion logs include the final status and request context: 4xx (including 499) are `Warning`, 5xx are `Error`, and other responses are `Information`. Handled exceptions are attached to this same log entry with their stack trace; exception handlers only produce the HTTP response.
+HTTP completion logs include the final status and request context: 4xx (including 499) are `Warning`, 5xx are `Error`, and other responses are `Information`. Exceptions handled by this package are attached to the completion log with their stack trace. Client aborts handled directly by ASP.NET Core (`OperationCanceledException`, including `TaskCanceledException`, or `IOException`) have no exception attached to the completion log. Exception handlers only produce the HTTP response.
 
 | Error type | HTTP status | Title |
 | --- | ---: | --- |
