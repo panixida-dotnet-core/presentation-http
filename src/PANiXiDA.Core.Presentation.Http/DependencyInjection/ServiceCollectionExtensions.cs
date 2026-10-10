@@ -62,7 +62,7 @@ public static class ServiceCollectionExtensions
         services.TryAddScoped<ICurrentUser, HttpCurrentUser>();
         services.AddCorsConfiguration();
         services.AddAuthenticationConfiguration(configuration);
-        services.AddAntiforgeryConfiguration();
+        services.AddAntiforgery();
         services.AddForwardedHeadersConfiguration(configuration);
         services.AddApiVersioningConfiguration();
         services.AddJsonConfiguration();
@@ -96,7 +96,7 @@ public static class ServiceCollectionExtensions
         LoggingMiddleware.UseEndpointScope(app);
         app.UseCorsConfiguration();
         app.UseAuthenticationConfiguration();
-        app.UseAntiforgeryConfiguration();
+        app.UseAntiforgery();
         app.UseOpenApiConfiguration();
         app.UseHealthChecksConfiguration();
         app.UseEndpointConfiguration(assemblies);
