@@ -15,8 +15,6 @@ internal static class ExceptionProblemDetailsFactory
         int statusCode,
         string title)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(title);
-
         var activity = Activity.Current;
 
         return new ProblemDetails
