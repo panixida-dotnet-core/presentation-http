@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
@@ -13,16 +12,6 @@ internal sealed class LoggingMiddleware(
     RequestDelegate next,
     ILogger<LoggingMiddleware> logger)
 {
-    internal static void UseEndpointScope(WebApplication app)
-    {
-        UseScope(app, HttpRequestLogScope.CreateEndpoint);
-    }
-
-    internal static void UseUserScope(WebApplication app)
-    {
-        UseScope(app, HttpRequestLogScope.CreateUser);
-    }
-
     public async Task InvokeAsync(HttpContext httpContext)
     {
         var startedAt = Stopwatch.GetTimestamp();
@@ -55,19 +44,6 @@ internal sealed class LoggingMiddleware(
                 }
             }
         }
-    }
-
-    private static void UseScope(
-        WebApplication app,
-        Func<HttpContext, IReadOnlyDictionary<string, object?>> createScope)
-    {
-        app.Use(async (context, next) =>
-        {
-            using (app.Logger.BeginScope(createScope(context)))
-            {
-                await next(context);
-            }
-        });
     }
 
     private static LogLevel GetLogLevel(int statusCode)

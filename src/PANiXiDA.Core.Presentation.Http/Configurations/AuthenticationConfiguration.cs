@@ -5,8 +5,6 @@ using Microsoft.Extensions.DependencyInjection;
 using OpenIddict.Validation;
 using OpenIddict.Validation.AspNetCore;
 
-using PANiXiDA.Core.Presentation.Http.Middlewares;
-
 namespace PANiXiDA.Core.Presentation.Http.Configurations;
 
 internal static class AuthenticationConfiguration
@@ -51,7 +49,7 @@ internal static class AuthenticationConfiguration
     internal static WebApplication UseAuthenticationConfiguration(this WebApplication app)
     {
         app.UseAuthentication();
-        LoggingMiddleware.UseUserScope(app);
+        app.UseUserScope();
         app.UseAuthorization();
 
         return app;

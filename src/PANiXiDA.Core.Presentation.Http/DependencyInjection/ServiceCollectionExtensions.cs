@@ -90,6 +90,9 @@ public static class ServiceCollectionExtensions
     {
         app.UseForwardedHeadersConfiguration();
         app.UseMiddlewareConfiguration();
+        app.UseHttpsRedirection();
+        app.UseRouting();
+        app.UseEndpointScope();
         app.UseCorsConfiguration();
         app.UseAuthenticationConfiguration();
         app.UseAntiforgery();
