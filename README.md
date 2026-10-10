@@ -34,6 +34,8 @@ It provides common Minimal API endpoint conventions, API versioning, OpenAPI set
 
 Full Native AOT support is currently blocked by API Versioning's OpenAPI/MVC integration.
 
+Callers must supply non-null values for non-nullable API parameters.
+
 ## Installation
 
 Reference the package in each endpoint project with its analyzer assets enabled.

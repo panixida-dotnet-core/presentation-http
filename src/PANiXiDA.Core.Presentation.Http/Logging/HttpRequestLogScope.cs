@@ -12,8 +12,6 @@ internal static class HttpRequestLogScope
 {
     internal static IReadOnlyDictionary<string, object?> Create(HttpContext httpContext)
     {
-        ArgumentNullException.ThrowIfNull(httpContext);
-
         return new Dictionary<string, object?>
         {
             ["network.protocol.name"] = "http",
@@ -27,8 +25,6 @@ internal static class HttpRequestLogScope
 
     internal static IReadOnlyDictionary<string, object?> CreateEndpoint(HttpContext httpContext)
     {
-        ArgumentNullException.ThrowIfNull(httpContext);
-
         var endpoint = httpContext.Features.Get<IExceptionHandlerFeature>()?.Endpoint ?? httpContext.GetEndpoint();
 
         return new Dictionary<string, object?>
@@ -40,8 +36,6 @@ internal static class HttpRequestLogScope
 
     internal static IReadOnlyDictionary<string, object?> CreateUser(HttpContext httpContext)
     {
-        ArgumentNullException.ThrowIfNull(httpContext);
-
         var claims = httpContext.User.Identities
             .Where(identity => identity.IsAuthenticated)
             .SelectMany(identity => identity.Claims);

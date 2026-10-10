@@ -231,21 +231,6 @@ public sealed class ServiceCollectionExtensionsTests
         payload.Status.ShouldBe(TestStatus.Active);
     }
 
-    [Fact(DisplayName = "AddHttp rejects a null module assembly collection")]
-    public void AddHttp_ShouldRejectNullModuleAssemblyCollection()
-    {
-        var services = new ServiceCollection();
-        var configuration = new ConfigurationBuilder().Build();
-        Assembly[] moduleAssemblies = null!;
-
-        var exception = Should.Throw<ArgumentNullException>(() =>
-        {
-            services.AddHttp(configuration, moduleAssemblies);
-        });
-
-        exception.ParamName.ShouldBe("moduleAssemblies");
-    }
-
     [Fact(DisplayName = "AddHttp rejects null values in the module assembly collection")]
     public void AddHttp_ShouldRejectNullModuleAssembly()
     {

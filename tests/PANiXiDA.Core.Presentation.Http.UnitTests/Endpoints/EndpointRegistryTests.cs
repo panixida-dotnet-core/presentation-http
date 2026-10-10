@@ -7,41 +7,6 @@ namespace PANiXiDA.Core.Presentation.Http.UnitTests.Endpoints;
 
 public sealed class EndpointRegistryTests
 {
-    [Fact(DisplayName = "Generated endpoint registration rejects null arguments")]
-    public void RegisterAssembly_ShouldRejectNullArguments()
-    {
-        var assembly = typeof(EndpointRegistryTests).Assembly;
-
-        Should.Throw<ArgumentNullException>(() => EndpointRegistry.RegisterAssembly(
-                null!,
-                _ => { },
-                (_, _) => null!,
-                (_, _) => []))
-            .ParamName
-            .ShouldBe("assembly");
-        Should.Throw<ArgumentNullException>(() => EndpointRegistry.RegisterAssembly(
-                assembly,
-                null!,
-                (_, _) => null!,
-                (_, _) => []))
-            .ParamName
-            .ShouldBe("mapGroups");
-        Should.Throw<ArgumentNullException>(() => EndpointRegistry.RegisterAssembly(
-                assembly,
-                _ => { },
-                null!,
-                (_, _) => []))
-            .ParamName
-            .ShouldBe("createGroup");
-        Should.Throw<ArgumentNullException>(() => EndpointRegistry.RegisterAssembly(
-                assembly,
-                _ => { },
-                (_, _) => null!,
-                null!))
-            .ParamName
-            .ShouldBe("createEndpoints");
-    }
-
     [Fact(DisplayName = "Generated endpoint registrations reject duplicates")]
     public void RegisterAssembly_ShouldRejectDuplicateAssembly()
     {
@@ -64,12 +29,6 @@ public sealed class EndpointRegistryTests
 
         exception.Message.ShouldContain("Generated endpoint registration was not found");
         exception.Message.ShouldContain("with its analyzers");
-        Should.Throw<ArgumentNullException>(() => EndpointRegistry.MapGroups(null!, typeof(string).Assembly))
-            .ParamName
-            .ShouldBe("endpoints");
-        Should.Throw<ArgumentNullException>(() => EndpointRegistry.MapGroups(app, null!))
-            .ParamName
-            .ShouldBe("assembly");
     }
 
     [Fact(DisplayName = "Generated registration supports groups without endpoints and rejects unknown factories")]

@@ -15,9 +15,6 @@ internal static class ExceptionProblemDetailsFactory
         int statusCode,
         string title)
     {
-        ArgumentNullException.ThrowIfNull(httpContext);
-        ArgumentNullException.ThrowIfNull(exception);
-        ArgumentNullException.ThrowIfNull(hostEnvironment);
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
 
         var activity = Activity.Current;

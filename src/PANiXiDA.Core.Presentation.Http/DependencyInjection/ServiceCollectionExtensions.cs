@@ -46,8 +46,6 @@ public static class ServiceCollectionExtensions
         IConfiguration configuration,
         params Assembly[] moduleAssemblies)
     {
-        ArgumentNullException.ThrowIfNull(moduleAssemblies);
-
         return AddHttpCore(services, configuration, moduleAssemblies);
     }
 
@@ -69,9 +67,7 @@ public static class ServiceCollectionExtensions
         services.AddJsonConfiguration();
         services.AddOpenApiConfiguration(configuration, moduleRegistry.Modules);
         services.AddProblemDetailsConfiguration();
-        services.AddExceptionHandler<ClientAbortedExceptionHandler>();
-        services.AddExceptionHandler<BadHttpRequestExceptionHandler>();
-        services.AddExceptionHandler<ExceptionHandler>();
+        services.AddMiddlewareConfiguration();
         services.AddValidation();
         services.AddHealthChecksConfiguration(configuration);
 
@@ -93,8 +89,7 @@ public static class ServiceCollectionExtensions
         params Assembly[] assemblies)
     {
         app.UseForwardedHeadersConfiguration();
-        app.UseMiddleware<LoggingMiddleware>();
-        app.UseExceptionHandler();
+        app.UseMiddlewareConfiguration();
         app.UseHttpsRedirection();
         app.UseRouting();
         LoggingMiddleware.UseEndpointScope(app);

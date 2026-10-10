@@ -137,21 +137,4 @@ public sealed class HttpRequestLogScopeTests
         scope.ContainsKey("SpanId").ShouldBeFalse();
     }
 
-    [Fact(DisplayName = "Request scope rejects a null HTTP context")]
-    public void Create_ShouldRejectNullHttpContext()
-    {
-        Should.Throw<ArgumentNullException>(() => HttpRequestLogScope.Create(null!)).ParamName.ShouldBe("httpContext");
-    }
-
-    [Fact(DisplayName = "Endpoint scope rejects a null HTTP context")]
-    public void CreateEndpoint_ShouldRejectNullHttpContext()
-    {
-        Should.Throw<ArgumentNullException>(() => HttpRequestLogScope.CreateEndpoint(null!)).ParamName.ShouldBe("httpContext");
-    }
-
-    [Fact(DisplayName = "User scope rejects a null HTTP context")]
-    public void CreateUser_ShouldRejectNullHttpContext()
-    {
-        Should.Throw<ArgumentNullException>(() => HttpRequestLogScope.CreateUser(null!)).ParamName.ShouldBe("httpContext");
-    }
 }
