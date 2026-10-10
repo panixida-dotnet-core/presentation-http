@@ -6,7 +6,6 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using PANiXiDA.Core.Application.Authentication.Abstractions;
 using PANiXiDA.Core.Presentation.Http.Authentication;
 using PANiXiDA.Core.Presentation.Http.Configurations;
-using PANiXiDA.Core.Presentation.Http.Middlewares;
 using PANiXiDA.Core.Presentation.Http.Modularity;
 
 using System.Reflection;
@@ -91,9 +90,6 @@ public static class ServiceCollectionExtensions
     {
         app.UseForwardedHeadersConfiguration();
         app.UseMiddlewareConfiguration();
-        app.UseHttpsRedirection();
-        app.UseRouting();
-        LoggingMiddleware.UseEndpointScope(app);
         app.UseCorsConfiguration();
         app.UseAuthenticationConfiguration();
         app.UseAntiforgery();

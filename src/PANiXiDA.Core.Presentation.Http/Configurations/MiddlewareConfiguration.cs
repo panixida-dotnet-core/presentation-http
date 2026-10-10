@@ -20,6 +20,9 @@ internal static class MiddlewareConfiguration
     {
         app.UseMiddleware<LoggingMiddleware>();
         app.UseExceptionHandler();
+        app.UseHttpsRedirection();
+        app.UseRouting();
+        LoggingMiddleware.UseEndpointScope(app);
 
         return app;
     }
