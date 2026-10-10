@@ -15,9 +15,6 @@ internal sealed class HttpModuleRegistry
         IConfiguration configuration,
         IReadOnlyCollection<Assembly> presentationAssemblies)
     {
-        ArgumentNullException.ThrowIfNull(configuration);
-        ArgumentNullException.ThrowIfNull(presentationAssemblies);
-
         var documentNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         modulesByAssembly = [];
         var registeredModules = new List<HttpModule>(presentationAssemblies.Count);

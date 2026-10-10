@@ -116,7 +116,7 @@ public sealed class OpenApiBearerAuthenticationTests
         AssertNoSecurityRequirement(document, "/anonymous");
     }
 
-    [Theory(DisplayName = "Public APIs do not receive a Bearer scheme or require authorization services")]
+    [Theory(DisplayName = "Public APIs do not receive a Bearer scheme without protected endpoints")]
     [InlineData(false)]
     [InlineData(true)]
     public async Task AddHttp_ShouldSupportPublicApplication(bool registerAuthentication)
@@ -322,9 +322,11 @@ public sealed class OpenApiBearerAuthenticationTests
     }
 
     [Theory(DisplayName = "OpenAPI does not infer Bearer when no default authentication scheme is selected")]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task AddHttp_ShouldNotInferBearerWithoutDefaultScheme(bool registerAuthentication)
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task OpenApi_ShouldNotInferBearerWithoutDefaultScheme(bool registerAuthentication, bool useHttp)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var builder = CreateBuilder();
@@ -333,7 +335,15 @@ public sealed class OpenApiBearerAuthenticationTests
             builder.Services.AddAuthentication().AddBearerToken().AddCookie();
         }
         builder.Services.AddAuthorization();
-        builder.Services.AddHttp(builder.Configuration);
+        if (useHttp)
+        {
+            builder.Services.AddHttp(builder.Configuration);
+        }
+        else
+        {
+            builder.Services.AddApiVersioningConfiguration();
+            builder.Services.AddOpenApiConfiguration(builder.Configuration, []);
+        }
         await using var app = builder.Build();
         app.MapGet("/protected", () => TypedResults.Ok()).RequireAuthorization();
         app.UseOpenApiConfiguration();

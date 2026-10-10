@@ -4,6 +4,8 @@ using Microsoft.Extensions.Logging;
 using PANiXiDA.Core.Presentation.Http.Middlewares;
 using PANiXiDA.Core.Presentation.Http.UnitTests.Support;
 
+using System.Security.Claims;
+
 namespace PANiXiDA.Core.Presentation.Http.UnitTests.Middlewares;
 
 public sealed class LoggingMiddlewareTests
@@ -35,10 +37,7 @@ public sealed class LoggingMiddlewareTests
         logEntry.Message.ShouldBe("HTTP request finished");
         logEntry.Exception.ShouldBeNull();
 
-        var requestScope = FindScope(logger, "http.request.method");
-        var responseScope = FindScope(logger, "http.response.status_code");
-
-        var scopeValues = requestScope;
+        var scopeValues = GetScopeAttributes(logger);
         scopeValues["network.protocol.name"].ShouldBe("http");
         scopeValues["http.request.method"].ShouldBe(HttpMethods.Post);
         scopeValues["url.path"].ShouldBe("/orders");
@@ -52,8 +51,8 @@ public sealed class LoggingMiddlewareTests
         scopeValues.ContainsKey("TraceId").ShouldBeFalse();
         scopeValues.ContainsKey("SpanId").ShouldBeFalse();
 
-        responseScope["http.response.status_code"].ShouldBe(statusCode);
-        responseScope["http.server.request.duration_ms"].ShouldBeAssignableTo<double>();
+        scopeValues["http.response.status_code"].ShouldBe(statusCode);
+        scopeValues["http.server.request.duration_ms"].ShouldBeAssignableTo<double>();
     }
 
     [Fact(DisplayName = "InvokeAsync logs request completion when the next middleware throws")]
@@ -95,7 +94,7 @@ public sealed class LoggingMiddlewareTests
 
         await middleware.InvokeAsync(httpContext);
 
-        var scopeValues = FindScope(logger, "http.request.method");
+        var scopeValues = GetScopeAttributes(logger);
 
         scopeValues["http.route"].ShouldBeNull();
         scopeValues["aspnetcore.endpoint.display_name"].ShouldBeNull();
@@ -106,12 +105,41 @@ public sealed class LoggingMiddlewareTests
         scopeValues.ContainsKey("SpanId").ShouldBeFalse();
     }
 
-    private static IReadOnlyDictionary<string, object?> FindScope(
-        TestLogger<LoggingMiddleware> logger,
-        string key)
+    [Theory(DisplayName = "InvokeAsync retains the authenticated user after the request context changes")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task InvokeAsync_ShouldRetainAuthenticatedUserWhenRequestContextChanges(bool throwException)
+    {
+        var logger = new TestLogger<LoggingMiddleware>();
+        var httpContext = TestHttpContextFactory.CreateMinimalHttpContext();
+        Task next(HttpContext context)
+        {
+            context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", "authenticated-user")], "test"));
+            return throwException
+                ? Task.FromException(new InvalidOperationException("Request failed"))
+                : Task.CompletedTask;
+        }
+
+        var middleware = new LoggingMiddleware(next, logger);
+
+        if (throwException)
+        {
+            await Should.ThrowAsync<InvalidOperationException>(() => middleware.InvokeAsync(httpContext));
+        }
+        else
+        {
+            await middleware.InvokeAsync(httpContext);
+        }
+
+        httpContext.User = new ClaimsPrincipal();
+        var scopeValues = GetScopeAttributes(logger);
+        scopeValues["enduser.id"].ShouldBe("authenticated-user");
+    }
+
+    private static Dictionary<string, object?> GetScopeAttributes(TestLogger<LoggingMiddleware> logger)
     {
         return logger.Scopes
-            .Select(scope => scope.ShouldBeAssignableTo<IReadOnlyDictionary<string, object?>>()!)
-            .Single(scope => scope.ContainsKey(key));
+            .SelectMany(scope => scope.ShouldBeAssignableTo<IReadOnlyDictionary<string, object?>>()!)
+            .ToDictionary();
     }
 }

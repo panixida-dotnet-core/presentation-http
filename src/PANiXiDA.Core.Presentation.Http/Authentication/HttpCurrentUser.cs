@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Http;
 
+using OpenIddict.Abstractions;
+
 using PANiXiDA.Core.Application.Authentication.Abstractions;
 
 using System.Diagnostics.CodeAnalysis;
@@ -23,7 +25,7 @@ internal sealed class HttpCurrentUser(IHttpContextAccessor httpContextAccessor) 
     {
         get
         {
-            var claim = Claims.FirstOrDefault(claim => claim.Type == "sub")
+            var claim = Claims.FirstOrDefault(claim => claim.Type == OpenIddictConstants.Claims.Subject)
                 ?? Claims.FirstOrDefault(claim => claim.Type == ClaimTypes.NameIdentifier);
 
             return Guid.TryParse(claim?.Value, out var userId) ? userId : null;

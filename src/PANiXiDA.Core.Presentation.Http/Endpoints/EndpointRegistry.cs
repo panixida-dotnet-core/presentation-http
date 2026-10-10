@@ -22,7 +22,6 @@ public static class EndpointRegistry
     /// <param name="mapGroups">The callback mapping all groups in deterministic type-name order.</param>
     /// <param name="createGroup">The callback creating a group using its generated constructor.</param>
     /// <param name="createEndpoints">The callback creating all endpoints belonging to a group.</param>
-    /// <exception cref="ArgumentNullException">An argument is null.</exception>
     /// <exception cref="ArgumentException">The assembly already has a registration.</exception>
     public static void RegisterAssembly(
         Assembly assembly,
@@ -30,11 +29,6 @@ public static class EndpointRegistry
         Func<Type, IServiceProvider, IEndpointGroup> createGroup,
         Func<Type, IServiceProvider, IReadOnlyList<IEndpoint>> createEndpoints)
     {
-        ArgumentNullException.ThrowIfNull(assembly);
-        ArgumentNullException.ThrowIfNull(mapGroups);
-        ArgumentNullException.ThrowIfNull(createGroup);
-        ArgumentNullException.ThrowIfNull(createEndpoints);
-
         Registrations.Add(assembly, new Registration(mapGroups, createGroup, createEndpoints));
     }
 
@@ -42,7 +36,6 @@ public static class EndpointRegistry
         IEndpointRouteBuilder endpoints,
         Assembly assembly)
     {
-        ArgumentNullException.ThrowIfNull(endpoints);
         GetRegistration(assembly).MapGroupRoutes(endpoints);
     }
 
@@ -60,8 +53,6 @@ public static class EndpointRegistry
 
     private static Registration GetRegistration(Assembly assembly)
     {
-        ArgumentNullException.ThrowIfNull(assembly);
-
         RuntimeHelpers.RunModuleConstructor(assembly.ManifestModule.ModuleHandle);
 
         if (Registrations.TryGetValue(assembly, out var registration))

@@ -15,7 +15,6 @@ internal sealed class LoggingMiddleware(
     public async Task InvokeAsync(HttpContext httpContext)
     {
         var startedAt = Stopwatch.GetTimestamp();
-
         using (logger.BeginScope(HttpRequestLogScope.Create(httpContext)))
         {
             try
@@ -29,6 +28,8 @@ internal sealed class LoggingMiddleware(
 
                 if (logger.IsEnabled(logLevel))
                 {
+                    using (logger.BeginScope(HttpRequestLogScope.CreateEndpoint(httpContext)))
+                    using (logger.BeginScope(HttpRequestLogScope.CreateUser(httpContext)))
                     using (logger.BeginScope(new Dictionary<string, object?>
                     {
                         ["http.response.status_code"] = httpContext.Response.StatusCode,

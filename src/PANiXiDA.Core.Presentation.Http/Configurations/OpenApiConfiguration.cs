@@ -11,11 +11,14 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 using PANiXiDA.Core.Presentation.Http.Modularity;
+using PANiXiDA.Core.Presentation.Http.Options.Scalar;
 using PANiXiDA.Core.Presentation.Http.Transformers;
 
 using Scalar.AspNetCore;
 
 using System.Diagnostics.CodeAnalysis;
+
+using ScalarOptions = PANiXiDA.Core.Presentation.Http.Options.Scalar.ScalarOptions;
 
 namespace PANiXiDA.Core.Presentation.Http.Configurations;
 
@@ -57,8 +60,10 @@ internal static class OpenApiConfiguration
         services.Replace(ServiceDescriptor.Singleton<IApiVersionDescriptionProvider>(serviceProvider =>
             serviceProvider.GetRequiredService<HttpModuleApiVersionDescriptionProvider>()));
 
-        services.Configure<ScalarConfiguration>(
-            configuration.GetSection(nameof(ScalarConfiguration)));
+        services.AddSingleton<IValidateOptions<ScalarOptions>, ScalarOptionsValidator>();
+        services.AddOptions<ScalarOptions>()
+            .Bind(configuration.GetSection(ScalarOptions.SectionName))
+            .ValidateOnStart();
 
         return services;
     }
@@ -67,11 +72,11 @@ internal static class OpenApiConfiguration
     {
         if (app.Environment.IsDevelopment())
         {
-            var scalarConfiguration = app.Services
-                .GetRequiredService<IOptions<ScalarConfiguration>>()
+            var scalarOptions = app.Services
+                .GetRequiredService<IOptions<ScalarOptions>>()
                 .Value;
-            var scalarTitle = scalarConfiguration.Title;
-            var scalarFavicon = scalarConfiguration.Favicon;
+            var scalarTitle = scalarOptions.Title;
+            var scalarFavicon = scalarOptions.Favicon;
             if (!string.IsNullOrWhiteSpace(scalarFavicon))
             {
                 app.MapStaticAssets().ShortCircuit();

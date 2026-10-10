@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -12,6 +13,9 @@ internal static class AuthenticationConfiguration
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        services.AddAuthentication();
+        services.AddAuthorization();
+
         var section = configuration.GetSection(nameof(OpenIddictValidationOptions));
         if (!section.Exists())
         {
@@ -29,7 +33,6 @@ internal static class AuthenticationConfiguration
             .ValidateOnStart();
 
         services.AddAuthentication(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme);
-        services.AddAuthorization();
         services.AddOpenIddict()
             .AddValidation(options =>
             {
@@ -41,5 +44,14 @@ internal static class AuthenticationConfiguration
             });
 
         return services;
+    }
+
+    internal static WebApplication UseAuthenticationConfiguration(this WebApplication app)
+    {
+        app.UseAuthentication();
+        app.UseUserScope();
+        app.UseAuthorization();
+
+        return app;
     }
 }

@@ -20,7 +20,7 @@ It provides common Minimal API endpoint conventions, API versioning, OpenAPI set
 - `UseHttp` adds the default middleware pipeline and maps source-generated endpoint registrations.
 - HTTP JSON contracts enforce required constructor parameters, nullable annotations, and strict number handling.
 - Module assemblies can be mapped to separate OpenAPI documents and Scalar sources for each API version through the `HttpModules` configuration section.
-- Health checks are registered by `AddHttp` and exposed at `/health` by `UseHttp`.
+- Health checks are registered by `AddHttp` and exposed by `UseHttp` at a configurable path, defaulting to `/health`.
 - `IEndpointGroup` defines route, resource name, and API version metadata for Minimal API endpoint groups.
 - `IEndpoint<TGroup>` defines route, name, and summary metadata for endpoints that belong to a specific group.
 - The bundled source generator registers endpoints in deterministic type-name order.
@@ -33,6 +33,8 @@ It provides common Minimal API endpoint conventions, API versioning, OpenAPI set
 - ASP.NET Core Minimal API application.
 
 Full Native AOT support is currently blocked by API Versioning's OpenAPI/MVC integration.
+
+Callers must supply non-null values for non-nullable API parameters.
 
 ## Installation
 
@@ -62,6 +64,19 @@ app.Run();
 ```
 
 Call `AddValidation()` in each endpoint/DTO assembly to generate validation metadata for its DTO properties. `AddHttp` registers the shared validation services.
+
+`UseHttp` configures forwarded headers → request logging → exception handling → HTTPS redirection → routing → CORS → authentication → authorization → antiforgery.
+`AddHttp` registers the base CORS, authentication and authorization services; `UseHttp` always adds their middleware. The host configures schemes and policies with `AddCors`, `AddAuthentication` and `AddAuthorization`; CORS uses the default policy or endpoint policies.
+
+Do not register routing, CORS, authentication, authorization or antiforgery middleware separately from `UseHttp`.
+
+## Antiforgery
+
+`AddHttp` registers antiforgery services; `UseHttp` runs antiforgery after authentication and authorization.
+Minimal API form binding (`[FromForm]`, `IFormFile`) requires a valid token and its cookie by default; missing or invalid tokens return 400.
+JSON endpoints without antiforgery metadata are unaffected. Bearer authentication does not automatically bypass form validation.
+Use `.DisableAntiforgery()` only on endpoints that do not rely on browser cookies, such as endpoints restricted to Bearer authentication.
+The host issues tokens through `IAntiforgery.GetAndStoreTokens` and can customize `AntiforgeryOptions` with `AddAntiforgery(options => ...)` before or after `AddHttp`.
 
 ## Current User
 
@@ -110,9 +125,6 @@ builder.Services.AddHttp(builder.Configuration);
 
 var app = builder.Build();
 app.UseHttp();
-app.UseRouting();
-app.UseAuthentication();
-app.UseAuthorization();
 
 app.MapGet("/protected", () => Results.Ok()).RequireAuthorization();
 app.Run();
@@ -173,11 +185,19 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 
 ## Health Checks
 
-`AddHttp` registers ASP.NET Core health check services, and `UseHttp` maps the health check endpoint at `/health`.
+`AddHttp` registers ASP.NET Core health check services, and `UseHttp` maps the health check endpoint at `/health` by default.
 
-```text
-GET /health
+Override the path in application configuration:
+
+```json
+{
+  "HealthCheckOptions": {
+    "Path": "/status/health"
+  }
+}
 ```
+
+The path must be nonblank and start with `/`; invalid values prevent startup. Only the configured path is mapped.
 
 Services can add their own checks after `AddHttp`.
 
@@ -312,6 +332,8 @@ In `Development`, error `ProblemDetails` responses include the exception message
 
 HTTP completion logs include the final status and request context: 4xx (including 499) are `Warning`, 5xx are `Error`, and other responses are `Information`. Exceptions handled by this package are attached to the completion log with their stack trace. Client aborts handled directly by ASP.NET Core (`OperationCanceledException`, including `TaskCanceledException`, or `IOException`) have no exception attached to the completion log. Exception handlers only produce the HTTP response.
 
+Completion logging also covers CORS preflight, authentication/authorization failures, and short-circuited endpoints. Scopes capture the route after routing and the authenticated `sub` claim (falling back to `NameIdentifier`) after authentication. These snapshots stay unchanged during deferred log export; completion logs capture the final request context.
+
 | Error type | HTTP status | Title |
 | --- | ---: | --- |
 | `Validation` | 400 | `One or more validation errors occurred.` |
@@ -383,8 +405,11 @@ handlers or forwarding selectors, and it does not generate documentation for Coo
 authentication. The Bearer component is added only to documents with matching operations, including
 versioned and unversioned module documents.
 
-The host must configure authentication, authorization services, and middleware. This configuration
-only maps authentication scheme names to OpenAPI Bearer security; it does not register handlers or
+The scheme list defaults to an empty array. Each configured scheme name must be nonblank; invalid options are rejected at startup.
+
+The host configures authentication schemes and authorization policies; `AddHttp` and `UseHttp`
+provide the base services and middleware. The OpenAPI configuration only maps authentication
+scheme names to OpenAPI Bearer security; it does not register handlers or
 change server-side access checks. Both JWT and opaque tokens are supported without prescribing a
 token format.
 
@@ -476,16 +501,8 @@ If either value is missing or blank, Scalar keeps its corresponding default.
 Place local icons in the host's `wwwroot` (`Microsoft.NET.Sdk.Web`).
 In `Development`, a nonblank `Favicon` makes `UseHttp` call `MapStaticAssets().ShortCircuit()` for all host assets.
 These assets must be public: middleware after routing, including authorization and CORS, is skipped.
-Place required middleware (HTTPS/HSTS, forwarded headers, error handling) before an explicit `UseRouting()`:
-
-```csharp
-app.UseForwardedHeaders();
-app.UseHttpsRedirection();
-app.UseRouting();
-app.UseAuthentication();
-app.UseAuthorization();
-app.UseHttp();
-```
+`UseHttp` ensures forwarded headers, request logging, exception handling, and HTTPS redirection run before static assets.
+Host-specific middleware needed for assets must run before `UseHttp`; for HSTS behind a proxy, call `UseForwardedHeaders()` then `UseHsts()` before it.
 
 With `CreateSlimBuilder`, also call `builder.WebHost.UseStaticWebAssets()` in `Development` before `Build()`.
 Outside `Development`, OpenAPI, Scalar, and automatic asset mapping are disabled.

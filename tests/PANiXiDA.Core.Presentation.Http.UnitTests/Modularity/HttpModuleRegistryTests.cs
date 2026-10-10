@@ -40,30 +40,6 @@ public sealed class HttpModuleRegistryTests
         registry.TryGetModule(typeof(HttpModuleRegistryTests).Assembly, out _).ShouldBeFalse();
     }
 
-    [Fact(DisplayName = "HTTP module registry requires configuration")]
-    public void Constructor_ShouldRequireConfiguration()
-    {
-        var exception = Should.Throw<ArgumentNullException>(() =>
-        {
-            _ = new HttpModuleRegistry(null!, []);
-        });
-
-        exception.ParamName.ShouldBe("configuration");
-    }
-
-    [Fact(DisplayName = "HTTP module registry requires a presentation assembly collection")]
-    public void Constructor_ShouldRequirePresentationAssemblies()
-    {
-        var configuration = new ConfigurationBuilder().Build();
-
-        var exception = Should.Throw<ArgumentNullException>(() =>
-        {
-            _ = new HttpModuleRegistry(configuration, null!);
-        });
-
-        exception.ParamName.ShouldBe("presentationAssemblies");
-    }
-
     [Fact(DisplayName = "HTTP module registry requires a configuration section for every assembly")]
     public void Constructor_ShouldRequireModuleConfigurationSection()
     {

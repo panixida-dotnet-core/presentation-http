@@ -21,8 +21,6 @@ public static class EndpointMapper
     public static RouteGroupBuilder MapGroupEndpoints<TGroup>(IEndpointRouteBuilder endpoints)
         where TGroup : IEndpointGroup
     {
-        ArgumentNullException.ThrowIfNull(endpoints);
-
         var endpointGroup = EndpointRegistry.CreateGroup<TGroup>(endpoints.ServiceProvider);
         var apiVersion = endpointGroup.ApiVersion;
         var apiVersionSet = endpoints
@@ -54,9 +52,6 @@ public static class EndpointMapper
         IServiceProvider serviceProvider)
         where TGroup : IEndpointGroup
     {
-        ArgumentNullException.ThrowIfNull(group);
-        ArgumentNullException.ThrowIfNull(serviceProvider);
-
         var moduleRegistry = serviceProvider.GetService<HttpModuleRegistry>();
 
         if (moduleRegistry is not null &&

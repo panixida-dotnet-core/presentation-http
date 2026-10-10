@@ -8,12 +8,12 @@ using Microsoft.OpenApi;
 
 using OpenIddict.Validation.AspNetCore;
 
-using PANiXiDA.Core.Presentation.Http.Configurations;
+using PANiXiDA.Core.Presentation.Http.Options.Scalar;
 
 namespace PANiXiDA.Core.Presentation.Http.Transformers;
 
 internal sealed class BearerSecurityOpenApiOperationTransformer(
-    IOptions<ScalarConfiguration> configuration) : IOpenApiOperationTransformer
+    IOptions<ScalarOptions> options) : IOpenApiOperationTransformer
 {
     private const string SchemeName = "Bearer";
 
@@ -89,6 +89,6 @@ internal sealed class BearerSecurityOpenApiOperationTransformer(
         return schemes.Any(scheme =>
             scheme is SchemeName or BearerTokenDefaults.AuthenticationScheme or
                 OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme ||
-            configuration.Value.BearerAuthenticationSchemes.Contains(scheme, StringComparer.Ordinal));
+            options.Value.BearerAuthenticationSchemes.Contains(scheme, StringComparer.Ordinal));
     }
 }

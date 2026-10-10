@@ -21,11 +21,6 @@ public sealed class EndpointMapBuilder : IEndpointRouteBuilder
         string name,
         string summary)
     {
-        ArgumentNullException.ThrowIfNull(group);
-        ArgumentNullException.ThrowIfNull(route);
-        ArgumentNullException.ThrowIfNull(name);
-        ArgumentNullException.ThrowIfNull(summary);
-
         this.group = group;
         this.route = route;
         this.name = name;
@@ -99,8 +94,6 @@ public sealed class EndpointMapBuilder : IEndpointRouteBuilder
     /// <returns>The route handler builder with endpoint metadata.</returns>
     public RouteHandlerBuilder ApplyMetadata(RouteHandlerBuilder builder)
     {
-        ArgumentNullException.ThrowIfNull(builder);
-
         return builder
             .WithName(name)
             .WithSummary(summary);

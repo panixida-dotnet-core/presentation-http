@@ -1,7 +1,9 @@
 using System.Collections.Concurrent;
 using System.Net;
 using System.Security.Claims;
+using System.Text.Encodings.Web;
 
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
@@ -10,6 +12,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 using PANiXiDA.Core.Presentation.Http.DependencyInjection;
 using PANiXiDA.Core.Presentation.Http.Middlewares;
@@ -18,6 +21,98 @@ namespace PANiXiDA.Core.Presentation.Http.UnitTests.DependencyInjection;
 
 public sealed class RequestCompletionLoggingTests
 {
+    [Theory(DisplayName = "Buffered log scopes retain the context available when each event was written")]
+    [InlineData(200)]
+    [InlineData(400)]
+    [InlineData(499)]
+    [InlineData(500)]
+    public async Task UseHttp_ShouldKeepBufferedScopesStable(int expectedStatus)
+    {
+        using var provider = new CapturingLoggerProvider();
+        var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = Environments.Production });
+        builder.WebHost.UseUrls("http://127.0.0.1:0");
+        builder.Logging.ClearProviders();
+        builder.Logging.AddProvider(provider);
+        builder.Services.AddHttp(builder.Configuration);
+        builder.Services.AddAuthentication("Probe")
+            .AddScheme<AuthenticationSchemeOptions, ProbeAuthenticationHandler>("Probe", null);
+        builder.Services.AddAuthorizationBuilder().AddPolicy("Probe", policy => policy.RequireAssertion(context =>
+        {
+            var httpContext = (HttpContext)context.Resource!;
+            httpContext.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("ScopeProbe").LogInformation("Authorizing");
+            return true;
+        }));
+        await using var app = builder.Build();
+        app.Use(async (context, next) =>
+        {
+            await next(context);
+            context.User = new ClaimsPrincipal();
+            context.SetEndpoint(null);
+            completed.SetResult();
+        });
+        app.UseHttp();
+        app.MapGet("/scope/{id}", (int id, HttpContext context) =>
+        {
+            context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("ScopeProbe").LogInformation("Handling");
+            if (expectedStatus == 400)
+            {
+                throw new BadHttpRequestException("Incomplete body");
+            }
+            if (expectedStatus == 499)
+            {
+                context.RequestAborted = new CancellationToken(true);
+                throw new TaskCanceledException("Client aborted", null, context.RequestAborted);
+            }
+            if (expectedStatus == 500)
+            {
+                throw new InvalidOperationException("Independent failure");
+            }
+            return TypedResults.Ok(id);
+        }).WithDisplayName("Scope endpoint").RequireAuthorization("Probe");
+        await app.StartAsync(TestContext.Current.CancellationToken);
+        var address = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.Single();
+        using var client = new HttpClient { BaseAddress = new Uri(address) };
+
+        using var response = await client.GetAsync("/scope/42", TestContext.Current.CancellationToken);
+        await completed.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe((HttpStatusCode)expectedStatus);
+        var records = provider.Records.Where(record => record.Category == "ScopeProbe"
+            || record.Category == typeof(LoggingMiddleware).FullName).ToArray();
+        records.Length.ShouldBe(4);
+        foreach (var record in records)
+        {
+            record.BufferedAttributes.ShouldBe(record.Attributes);
+            record.Attributes.Select(pair => pair.Key).Distinct().Count().ShouldBe(record.Attributes.Count);
+            record.Attributes.Single(pair => pair.Key == "http.route").Value.ShouldBe("/scope/{id}");
+            record.Attributes.Single(pair => pair.Key == "aspnetcore.endpoint.display_name").Value.ShouldBe("Scope endpoint");
+            record.Attributes.Single(pair => pair.Key == "url.path").Value.ShouldBe("/scope/42");
+            if (record.Message != "Authenticating")
+            {
+                record.Attributes.Single(pair => pair.Key == "enduser.id").Value.ShouldBe("user-42");
+            }
+        }
+        var authenticating = records.Single(record => record.Message == "Authenticating");
+        authenticating.Attributes.ShouldNotContain(pair => pair.Key == "enduser.id" && pair.Value != null);
+        var completion = records.Single(record => record.Category == typeof(LoggingMiddleware).FullName);
+        completion.Level.ShouldBe(expectedStatus >= 500 ? LogLevel.Error : expectedStatus >= 400 ? LogLevel.Warning : LogLevel.Information);
+        completion.Attributes.Single(pair => pair.Key == "http.response.status_code").Value.ShouldBe(expectedStatus);
+    }
+
+    private sealed class ProbeAuthenticationHandler(
+        IOptionsMonitor<AuthenticationSchemeOptions> options,
+        ILoggerFactory loggerFactory,
+        UrlEncoder encoder) : AuthenticationHandler<AuthenticationSchemeOptions>(options, loggerFactory, encoder)
+    {
+        protected override Task<AuthenticateResult> HandleAuthenticateAsync()
+        {
+            Context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("ScopeProbe").LogInformation("Authenticating");
+            var principal = new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", "user-42")], Scheme.Name));
+            return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(principal, Scheme.Name)));
+        }
+    }
+
     [Theory(DisplayName = "UseHttp logs handled exceptions once with the final status and request scope")]
     [InlineData(true, ExceptionKind.Cancellation, StatusCodes.Status499ClientClosedRequest, LogLevel.Warning)]
     [InlineData(false, ExceptionKind.Cancellation, StatusCodes.Status500InternalServerError, LogLevel.Error)]
@@ -72,15 +167,21 @@ public sealed class RequestCompletionLoggingTests
         builder.Logging.ClearProviders();
         builder.Logging.AddProvider(provider);
         builder.Services.AddHttp(builder.Configuration);
+        builder.Services.AddAuthentication("Probe")
+            .AddScheme<AuthenticationSchemeOptions, ProbeAuthenticationHandler>("Probe", null);
         await using var app = builder.Build();
         app.Use(async (context, next) =>
         {
-            context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "user-42")], "test"));
             await next(context);
             completed.SetResult();
         });
         app.UseHttp();
-        app.MapGet("/throw", (HttpContext context) =>
+        app.Use(async (context, next) =>
+        {
+            context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("AuthenticatedRequest").LogInformation("Authenticated request");
+            await next(context);
+        });
+        app.MapGet("/throw", context =>
         {
             context.RequestAborted = requestAbortedToken;
             throw exception;
@@ -126,6 +227,9 @@ public sealed class RequestCompletionLoggingTests
             record.Attributes.Single(pair => pair.Key == "client.address").Value.ShouldBe("127.0.0.1");
             record.Attributes.Single(pair => pair.Key == "user_agent.original").Value.ShouldBe("UnitTest");
         }
+
+        var authenticated = provider.Records.Single(record => record.Category == "AuthenticatedRequest");
+        authenticated.Attributes.Single(pair => pair.Key == "enduser.id").Value.ShouldBe("user-42");
     }
 
     public enum ExceptionKind
@@ -169,18 +273,23 @@ public sealed class RequestCompletionLoggingTests
 
             public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
             {
-                var attributes = new List<KeyValuePair<string, object?>>();
+                var scopes = new List<IEnumerable<KeyValuePair<string, object?>>>();
                 provider.scopeProvider.ForEachScope(static (scope, values) =>
                 {
                     if (scope is IEnumerable<KeyValuePair<string, object?>> pairs)
                     {
-                        values.AddRange(pairs);
+                        values.Add(pairs);
                     }
-                }, attributes);
-                provider.Records.Enqueue(new LogEntry(category, logLevel, formatter(state, exception), exception, attributes));
+                }, scopes);
+                var attributes = scopes.SelectMany(scope => scope).ToList();
+                provider.Records.Enqueue(new LogEntry(category, logLevel, formatter(state, exception), exception, attributes, scopes));
             }
         }
     }
 
-    private sealed record LogEntry(string Category, LogLevel Level, string Message, Exception? Exception, List<KeyValuePair<string, object?>> Attributes);
+    private sealed record LogEntry(string Category, LogLevel Level, string Message, Exception? Exception,
+        List<KeyValuePair<string, object?>> Attributes, List<IEnumerable<KeyValuePair<string, object?>>> Scopes)
+    {
+        public IEnumerable<KeyValuePair<string, object?>> BufferedAttributes => Scopes.SelectMany(scope => scope);
+    }
 }

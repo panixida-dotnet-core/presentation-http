@@ -10,40 +10,6 @@ namespace PANiXiDA.Core.Presentation.Http.UnitTests.Endpoints;
 
 public sealed class EndpointMapBuilderTests
 {
-    [Fact(DisplayName = "Constructor validates arguments")]
-    public void Constructor_ShouldValidateArguments()
-    {
-        var builder = WebApplication.CreateBuilder();
-        using var app = builder.Build();
-        var group = app.MapGroup("/users");
-
-        var groupException = Should.Throw<ArgumentNullException>(() => new EndpointMapBuilder(
-            null!,
-            "/{id:guid}",
-            "UpdateUser",
-            "Updates a user."));
-        var routeException = Should.Throw<ArgumentNullException>(() => new EndpointMapBuilder(
-            group,
-            null!,
-            "UpdateUser",
-            "Updates a user."));
-        var nameException = Should.Throw<ArgumentNullException>(() => new EndpointMapBuilder(
-            group,
-            "/{id:guid}",
-            null!,
-            "Updates a user."));
-        var summaryException = Should.Throw<ArgumentNullException>(() => new EndpointMapBuilder(
-            group,
-            "/{id:guid}",
-            "UpdateUser",
-            null!));
-
-        groupException.ParamName.ShouldBe("group");
-        routeException.ParamName.ShouldBe("route");
-        nameException.ParamName.ShouldBe("name");
-        summaryException.ParamName.ShouldBe("summary");
-    }
-
     [Fact(DisplayName = "Constructor assigns properties")]
     public void Constructor_ShouldAssignProperties()
     {
@@ -236,19 +202,6 @@ public sealed class EndpointMapBuilderTests
         AssertMappedEndpoint(
             static builder => builder.ApplyMetadata(builder.Group.MapGet(builder.Route, Handle)),
             "GET");
-    }
-
-    [Fact(DisplayName = "ApplyMetadata rejects a null route handler builder")]
-    public void ApplyMetadata_ShouldValidateBuilder()
-    {
-        var builder = WebApplication.CreateBuilder();
-        using var app = builder.Build();
-        var group = app.MapGroup("/users");
-        var endpointMapBuilder = CreateEndpointMapBuilder(group);
-
-        var exception = Should.Throw<ArgumentNullException>(() => endpointMapBuilder.ApplyMetadata(null!));
-
-        exception.ParamName.ShouldBe("builder");
     }
 
     private static void AssertMappedEndpoint(

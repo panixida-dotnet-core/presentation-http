@@ -6,8 +6,6 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using PANiXiDA.Core.Application.Authentication.Abstractions;
 using PANiXiDA.Core.Presentation.Http.Authentication;
 using PANiXiDA.Core.Presentation.Http.Configurations;
-using PANiXiDA.Core.Presentation.Http.Endpoints;
-using PANiXiDA.Core.Presentation.Http.Middlewares;
 using PANiXiDA.Core.Presentation.Http.Modularity;
 
 using System.Reflection;
@@ -21,7 +19,7 @@ namespace PANiXiDA.Core.Presentation.Http.DependencyInjection;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers the default HTTP presentation services, including strict JSON contracts, API versioning, OpenAPI, validation, Problem Details, exception handling, health checks, and forwarded headers.
+    /// Registers the default HTTP presentation services, including authentication, authorization, antiforgery, CORS, strict JSON contracts, API versioning, OpenAPI, validation, Problem Details, exception handling, health checks, and forwarded headers.
     /// </summary>
     /// <param name="services">The application service collection.</param>
     /// <param name="configuration">The application configuration. The <c>ForwardedHeaders</c> section configures proxy headers; <c>OpenIddictValidationOptions</c> enables Bearer token introspection when present.</param>
@@ -35,7 +33,7 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers the default HTTP presentation services with strict JSON contracts and separate OpenAPI documents for each module and API version.
+    /// Registers the default HTTP presentation services, including authentication, authorization, antiforgery and CORS, with strict JSON contracts and separate OpenAPI documents for each module and API version.
     /// </summary>
     /// <param name="services">The application service collection.</param>
     /// <param name="configuration">The application configuration. <c>HttpModules</c> defines module documents by assembly name; <c>OpenIddictValidationOptions</c> enables Bearer token introspection when present.</param>
@@ -47,8 +45,6 @@ public static class ServiceCollectionExtensions
         IConfiguration configuration,
         params Assembly[] moduleAssemblies)
     {
-        ArgumentNullException.ThrowIfNull(moduleAssemblies);
-
         return AddHttpCore(services, configuration, moduleAssemblies);
     }
 
@@ -63,17 +59,17 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(moduleRegistry);
         services.AddHttpContextAccessor();
         services.TryAddScoped<ICurrentUser, HttpCurrentUser>();
+        services.AddCorsConfiguration();
         services.AddAuthenticationConfiguration(configuration);
+        services.AddAntiforgery();
         services.AddForwardedHeadersConfiguration(configuration);
         services.AddApiVersioningConfiguration();
         services.AddJsonConfiguration();
         services.AddOpenApiConfiguration(configuration, moduleRegistry.Modules);
         services.AddProblemDetailsConfiguration();
-        services.AddExceptionHandler<ClientAbortedExceptionHandler>();
-        services.AddExceptionHandler<BadHttpRequestExceptionHandler>();
-        services.AddExceptionHandler<ExceptionHandler>();
+        services.AddMiddlewareConfiguration();
         services.AddValidation();
-        services.AddHealthChecks();
+        services.AddHealthChecksConfiguration(configuration);
 
         return services;
     }
@@ -81,6 +77,10 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Adds the HTTP presentation middleware and maps source-generated endpoint groups from the specified assemblies.
     /// </summary>
+    /// <remarks>
+    /// Configures forwarded headers, request logging, exception handling, HTTPS redirection, routing, CORS, authentication, authorization and antiforgery.
+    /// CORS policies, authentication schemes and authorization policies must be registered by the host. Do not add routing, CORS, authentication/authorization or antiforgery middleware separately.
+    /// </remarks>
     /// <param name="app">The ASP.NET Core application instance.</param>
     /// <param name="assemblies">The assemblies containing generated endpoint registrations.</param>
     /// <returns>The original application instance for further configuration.</returns>
@@ -89,32 +89,16 @@ public static class ServiceCollectionExtensions
         params Assembly[] assemblies)
     {
         app.UseForwardedHeadersConfiguration();
-        app.UseMiddleware<LoggingMiddleware>();
-        app.UseExceptionHandler();
+        app.UseMiddlewareConfiguration();
         app.UseHttpsRedirection();
+        app.UseRouting();
+        app.UseEndpointScope();
+        app.UseCorsConfiguration();
+        app.UseAuthenticationConfiguration();
+        app.UseAntiforgery();
         app.UseOpenApiConfiguration();
-        app.MapHealthChecks("/health");
-
-        var mappedAssemblies = new HashSet<Assembly>();
-        var moduleRegistry = app.Services.GetRequiredService<HttpModuleRegistry>();
-        var moduleAssemblies = moduleRegistry.Modules.Select(
-            static module => module.PresentationAssembly);
-
-        foreach (var presentationAssembly in moduleAssemblies)
-        {
-            EndpointRegistry.MapGroups(app, presentationAssembly);
-            mappedAssemblies.Add(presentationAssembly);
-        }
-
-        foreach (var assembly in assemblies)
-        {
-            if (!mappedAssemblies.Add(assembly))
-            {
-                continue;
-            }
-
-            EndpointRegistry.MapGroups(app, assembly);
-        }
+        app.UseHealthChecksConfiguration();
+        app.UseEndpointConfiguration(assemblies);
 
         return app;
     }
