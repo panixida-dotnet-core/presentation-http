@@ -20,7 +20,7 @@ namespace PANiXiDA.Core.Presentation.Http.DependencyInjection;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers the default HTTP presentation services, including authentication, authorization, CORS, strict JSON contracts, API versioning, OpenAPI, validation, Problem Details, exception handling, health checks, and forwarded headers.
+    /// Registers the default HTTP presentation services, including authentication, authorization, antiforgery, CORS, strict JSON contracts, API versioning, OpenAPI, validation, Problem Details, exception handling, health checks, and forwarded headers.
     /// </summary>
     /// <param name="services">The application service collection.</param>
     /// <param name="configuration">The application configuration. The <c>ForwardedHeaders</c> section configures proxy headers; <c>OpenIddictValidationOptions</c> enables Bearer token introspection when present.</param>
@@ -34,7 +34,7 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers the default HTTP presentation services, including authentication, authorization and CORS, with strict JSON contracts and separate OpenAPI documents for each module and API version.
+    /// Registers the default HTTP presentation services, including authentication, authorization, antiforgery and CORS, with strict JSON contracts and separate OpenAPI documents for each module and API version.
     /// </summary>
     /// <param name="services">The application service collection.</param>
     /// <param name="configuration">The application configuration. <c>HttpModules</c> defines module documents by assembly name; <c>OpenIddictValidationOptions</c> enables Bearer token introspection when present.</param>
@@ -62,6 +62,7 @@ public static class ServiceCollectionExtensions
         services.TryAddScoped<ICurrentUser, HttpCurrentUser>();
         services.AddCorsConfiguration();
         services.AddAuthenticationConfiguration(configuration);
+        services.AddAntiforgeryConfiguration();
         services.AddForwardedHeadersConfiguration(configuration);
         services.AddApiVersioningConfiguration();
         services.AddJsonConfiguration();
@@ -78,8 +79,8 @@ public static class ServiceCollectionExtensions
     /// Adds the HTTP presentation middleware and maps source-generated endpoint groups from the specified assemblies.
     /// </summary>
     /// <remarks>
-    /// Configures forwarded headers, request logging, exception handling, HTTPS redirection, routing, CORS, authentication and authorization.
-    /// CORS policies, authentication schemes and authorization policies must be registered by the host. Do not add routing, CORS or authentication/authorization middleware separately.
+    /// Configures forwarded headers, request logging, exception handling, HTTPS redirection, routing, CORS, authentication, authorization and antiforgery.
+    /// CORS policies, authentication schemes and authorization policies must be registered by the host. Do not add routing, CORS, authentication/authorization or antiforgery middleware separately.
     /// </remarks>
     /// <param name="app">The ASP.NET Core application instance.</param>
     /// <param name="assemblies">The assemblies containing generated endpoint registrations.</param>
@@ -95,6 +96,7 @@ public static class ServiceCollectionExtensions
         LoggingMiddleware.UseEndpointScope(app);
         app.UseCorsConfiguration();
         app.UseAuthenticationConfiguration();
+        app.UseAntiforgeryConfiguration();
         app.UseOpenApiConfiguration();
         app.UseHealthChecksConfiguration();
         app.UseEndpointConfiguration(assemblies);

@@ -65,10 +65,18 @@ app.Run();
 
 Call `AddValidation()` in each endpoint/DTO assembly to generate validation metadata for its DTO properties. `AddHttp` registers the shared validation services.
 
-`UseHttp` configures forwarded headers → request logging → exception handling → HTTPS redirection → routing → CORS → authentication → authorization.
+`UseHttp` configures forwarded headers → request logging → exception handling → HTTPS redirection → routing → CORS → authentication → authorization → antiforgery.
 `AddHttp` registers the base CORS, authentication and authorization services; `UseHttp` always adds their middleware. The host configures schemes and policies with `AddCors`, `AddAuthentication` and `AddAuthorization`; CORS uses the default policy or endpoint policies.
 
-Do not register routing, CORS, authentication or authorization middleware separately from `UseHttp`.
+Do not register routing, CORS, authentication, authorization or antiforgery middleware separately from `UseHttp`.
+
+## Antiforgery
+
+`AddHttp` registers antiforgery services; `UseHttp` runs antiforgery after authentication and authorization.
+Minimal API form binding (`[FromForm]`, `IFormFile`) requires a valid token and its cookie by default; missing or invalid tokens return 400.
+JSON endpoints without antiforgery metadata are unaffected. Bearer authentication does not automatically bypass form validation.
+Use `.DisableAntiforgery()` only on endpoints that do not rely on browser cookies, such as endpoints restricted to Bearer authentication.
+The host issues tokens through `IAntiforgery.GetAndStoreTokens` and can customize `AntiforgeryOptions` with `AddAntiforgery(options => ...)` before or after `AddHttp`.
 
 ## Current User
 

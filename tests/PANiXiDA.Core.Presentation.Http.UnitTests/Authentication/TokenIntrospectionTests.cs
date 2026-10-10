@@ -1,13 +1,16 @@
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 using OpenIddict.Validation.SystemNetHttp;
 
@@ -169,6 +172,61 @@ public sealed class TokenIntrospectionTests
         identity.IntrospectedTokens.ShouldBeEmpty();
     }
 
+    [Theory(DisplayName = "JSON endpoints use OpenIddict Bearer authentication without antiforgery tokens")]
+    [InlineData("/json", null, HttpStatusCode.Unauthorized)]
+    [InlineData("/json", "invalid", HttpStatusCode.Unauthorized)]
+    [InlineData("/json", "valid", HttpStatusCode.OK)]
+    [InlineData("/public-json", null, HttpStatusCode.OK)]
+    public async Task JsonEndpoint_ShouldNotRequireAntiforgeryToken(string path, string? token, HttpStatusCode expectedStatus)
+    {
+        await using var app = await CreateApplicationAsync(new IdentityServerHandler());
+        using var client = CreateClient(app, token);
+
+        using var response = await client.PostAsJsonAsync(path, new Payload("submitted"), TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(expectedStatus);
+        response.Headers.Contains("Set-Cookie").ShouldBeFalse();
+        if (expectedStatus == HttpStatusCode.OK)
+        {
+            (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).ShouldBe("submitted");
+        }
+    }
+
+    [Theory(DisplayName = "Authentication and authorization precede antiforgery and Bearer does not bypass it")]
+    [InlineData("/form", null, HttpStatusCode.Unauthorized)]
+    [InlineData("/form", "invalid", HttpStatusCode.Unauthorized)]
+    [InlineData("/form", "valid", HttpStatusCode.BadRequest)]
+    [InlineData("/admin-form", "valid", HttpStatusCode.Forbidden)]
+    [InlineData("/form-optout", "valid", HttpStatusCode.OK)]
+    [InlineData("/form-optout", null, HttpStatusCode.Unauthorized)]
+    public async Task FormEndpoint_ShouldEnforceAuthenticationBeforeAntiforgery(
+        string path, string? token, HttpStatusCode expectedStatus)
+    {
+        await using var app = await CreateApplicationAsync(new IdentityServerHandler());
+        using var client = CreateClient(app, token);
+        using var content = new FormUrlEncodedContent(new Dictionary<string, string> { ["value"] = "submitted" });
+
+        using var response = await client.PostAsync(path, content, TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(expectedStatus);
+    }
+
+    [Fact(DisplayName = "Antiforgery validates tokens against the authenticated OpenIddict user")]
+    public async Task FormEndpoint_ShouldAcceptTokenForAuthenticatedUser()
+    {
+        await using var app = await CreateApplicationAsync(new IdentityServerHandler());
+        using var client = CreateClient(app, "valid");
+        var token = await client.GetStringAsync("/antiforgery-token", TestContext.Current.CancellationToken);
+        var options = app.Services.GetRequiredService<IOptions<AntiforgeryOptions>>().Value;
+        client.DefaultRequestHeaders.Add(options.HeaderName!, token);
+        using var content = new FormUrlEncodedContent(new Dictionary<string, string> { ["value"] = "submitted" });
+
+        using var response = await client.PostAsync("/form", content, TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).ShouldBe("submitted");
+    }
+
     private static async Task<WebApplication> CreateApplicationAsync(IdentityServerHandler identity, bool registerTwice = false)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = Environments.Development });
@@ -204,6 +262,15 @@ public sealed class TokenIntrospectionTests
         app.MapGet("/review", () => Results.Ok()).RequireAuthorization("review");
         app.MapGet("/admin", () => Results.Ok()).RequireAuthorization("admin");
         app.MapGet("/public", () => Results.Ok()).AllowAnonymous();
+        app.MapPost("/json", (Payload payload) => TypedResults.Text(payload.Value)).RequireAuthorization();
+        app.MapPost("/public-json", (Payload payload) => TypedResults.Text(payload.Value)).AllowAnonymous();
+        app.MapPost("/form", ([FromForm] string value) => TypedResults.Text(value)).RequireAuthorization();
+        app.MapPost("/admin-form", ([FromForm] string value) => TypedResults.Text(value)).RequireAuthorization("admin");
+        app.MapPost("/form-optout", ([FromForm] string value) => TypedResults.Text(value))
+            .RequireAuthorization()
+            .DisableAntiforgery();
+        app.MapGet("/antiforgery-token", (IAntiforgery antiforgery, HttpContext context) =>
+            TypedResults.Text(antiforgery.GetAndStoreTokens(context).RequestToken!)).RequireAuthorization();
 
         await app.StartAsync(TestContext.Current.CancellationToken);
         return app;
@@ -222,4 +289,6 @@ public sealed class TokenIntrospectionTests
     }
 
     private sealed record Profile(Guid? UserId, string? Subject, string? Name, string[] Roles, bool CanRead);
+
+    private sealed record Payload(string Value);
 }
