@@ -3,6 +3,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
+using PANiXiDA.Core.Presentation.Http.Options.HealthCheck;
+
 namespace PANiXiDA.Core.Presentation.Http.Configurations;
 
 internal static class HealthChecksConfiguration
@@ -12,10 +14,9 @@ internal static class HealthChecksConfiguration
         IConfiguration configuration)
     {
         services.AddHealthChecks();
-        services.AddOptions<HealthCheckEndpointOptions>()
-            .Bind(configuration.GetSection(nameof(HealthCheckEndpointOptions)))
-            .Validate(static options => !string.IsNullOrWhiteSpace(options.Path) && options.Path.StartsWith('/'),
-                "HealthCheckEndpointOptions.Path must be a non-empty path starting with '/'.")
+        services.AddSingleton<IValidateOptions<HealthCheckOptions>, HealthCheckOptionsValidator>();
+        services.AddOptions<HealthCheckOptions>()
+            .Bind(configuration.GetSection(HealthCheckOptions.SectionName))
             .ValidateOnStart();
 
         return services;
@@ -23,7 +24,7 @@ internal static class HealthChecksConfiguration
 
     internal static WebApplication UseHealthChecksConfiguration(this WebApplication app)
     {
-        var options = app.Services.GetRequiredService<IOptions<HealthCheckEndpointOptions>>().Value;
+        var options = app.Services.GetRequiredService<IOptions<HealthCheckOptions>>().Value;
         app.MapHealthChecks(options.Path);
 
         return app;

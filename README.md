@@ -181,7 +181,7 @@ Override the path in application configuration:
 
 ```json
 {
-  "HealthCheckEndpointOptions": {
+  "HealthCheckOptions": {
     "Path": "/status/health"
   }
 }
@@ -394,6 +394,8 @@ policy scheme only if it accepts Bearer tokens. The library does not infer proto
 handlers or forwarding selectors, and it does not generate documentation for Cookie or certificate
 authentication. The Bearer component is added only to documents with matching operations, including
 versioned and unversioned module documents.
+
+The scheme list defaults to an empty array. Each configured scheme name must be nonblank; invalid options are rejected at startup.
 
 The host configures authentication schemes and authorization policies; `AddHttp` and `UseHttp`
 provide the base services and middleware. The OpenAPI configuration only maps authentication

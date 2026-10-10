@@ -18,6 +18,7 @@ using PANiXiDA.Core.Presentation.Http.Configurations;
 using PANiXiDA.Core.Presentation.Http.DependencyInjection;
 using PANiXiDA.Core.Presentation.Http.Endpoints;
 using PANiXiDA.Core.Presentation.Http.Modularity;
+using PANiXiDA.Core.Presentation.Http.Options.Scalar;
 using PANiXiDA.Core.Presentation.Http.UnitTests.Endpoints.Fixtures.Groups;
 
 using System.Net;
@@ -57,15 +58,15 @@ public sealed class OpenApiConfigurationTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                [nameof(ScalarConfiguration) + ":" + nameof(ScalarConfiguration.Title)] = "Orders API Reference",
-                [nameof(ScalarConfiguration) + ":" + nameof(ScalarConfiguration.Favicon)] = "/favicon.svg"
+                [ScalarOptions.SectionName + ":" + nameof(ScalarOptions.Title)] = "Orders API Reference",
+                [ScalarOptions.SectionName + ":" + nameof(ScalarOptions.Favicon)] = "/favicon.svg"
             })
             .Build();
 
         services.AddOpenApiConfiguration(configuration, []);
 
         using var serviceProvider = services.BuildServiceProvider();
-        var options = serviceProvider.GetRequiredService<IOptions<ScalarConfiguration>>().Value;
+        var options = serviceProvider.GetRequiredService<IOptions<ScalarOptions>>().Value;
 
         options.Title.ShouldBe("Orders API Reference");
         options.Favicon.ShouldBe("/favicon.svg");
@@ -98,7 +99,7 @@ public sealed class OpenApiConfigurationTests
         await using var app = await CreateStartedApplicationAsync(
             new Dictionary<string, string?>
             {
-                [nameof(ScalarConfiguration) + ":" + nameof(ScalarConfiguration.Title)] = "Orders API Reference"
+                [ScalarOptions.SectionName + ":" + nameof(ScalarOptions.Title)] = "Orders API Reference"
             },
             TestContext.Current.CancellationToken);
         using var client = CreateClient(app);
@@ -122,7 +123,7 @@ public sealed class OpenApiConfigurationTests
         await using var app = await CreateStartedApplicationAsync(
             new Dictionary<string, string?>
             {
-                [nameof(ScalarConfiguration) + ":" + nameof(ScalarConfiguration.Favicon)] = "/favicon.svg"
+                [ScalarOptions.SectionName + ":" + nameof(ScalarOptions.Favicon)] = "/favicon.svg"
             },
             TestContext.Current.CancellationToken,
             configureApplication: application =>
@@ -171,7 +172,7 @@ public sealed class OpenApiConfigurationTests
         await using var app = await CreateStartedApplicationAsync(
             new Dictionary<string, string?>
             {
-                [nameof(ScalarConfiguration) + ":" + nameof(ScalarConfiguration.Favicon)] = "/favicon.svg"
+                [ScalarOptions.SectionName + ":" + nameof(ScalarOptions.Favicon)] = "/favicon.svg"
             },
             TestContext.Current.CancellationToken,
             configureApplication: application =>
@@ -219,7 +220,7 @@ public sealed class OpenApiConfigurationTests
         await using var app = await CreateStartedApplicationAsync(
             new Dictionary<string, string?>
             {
-                [nameof(ScalarConfiguration) + ":" + nameof(ScalarConfiguration.Favicon)] = favicon
+                [ScalarOptions.SectionName + ":" + nameof(ScalarOptions.Favicon)] = favicon
             },
             TestContext.Current.CancellationToken);
         using var client = CreateClient(app);
@@ -689,7 +690,7 @@ public sealed class OpenApiConfigurationTests
 
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            [nameof(ScalarConfiguration) + ":" + nameof(ScalarConfiguration.Favicon)] = "/favicon.svg"
+            [ScalarOptions.SectionName + ":" + nameof(ScalarOptions.Favicon)] = "/favicon.svg"
         });
         builder.Services.AddOpenApiConfiguration(builder.Configuration, []);
 

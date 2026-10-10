@@ -44,10 +44,11 @@ public sealed class HealthChecksConfigurationTests
     }
 
     [Theory(DisplayName = "An empty or relative health path prevents startup")]
+    [InlineData(null)]
     [InlineData("")]
     [InlineData(" ")]
     [InlineData("health")]
-    public async Task AddHttp_ShouldRejectInvalidHealthCheckPath(string path)
+    public async Task AddHttp_ShouldRejectInvalidHealthCheckPath(string? path)
     {
         var builder = CreateBuilder(path);
         builder.Services.AddHttp(builder.Configuration);
@@ -56,10 +57,10 @@ public sealed class HealthChecksConfigurationTests
         var exception = await Should.ThrowAsync<OptionsValidationException>(
             () => app.StartAsync(TestContext.Current.CancellationToken));
 
-        exception.Message.ShouldContain("HealthCheckEndpointOptions.Path");
+        exception.Message.ShouldContain("HealthCheckOptions.Path");
     }
 
-    private static WebApplicationBuilder CreateBuilder(string path)
+    private static WebApplicationBuilder CreateBuilder(string? path)
     {
         var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions
         {
@@ -69,7 +70,7 @@ public sealed class HealthChecksConfigurationTests
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["HealthCheckEndpointOptions:Path"] = path
+            ["HealthCheckOptions:Path"] = path
         });
         return builder;
     }
