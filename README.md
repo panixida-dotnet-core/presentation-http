@@ -573,3 +573,11 @@ The NuGet package includes:
 ## License
 
 This project is licensed under the Apache-2.0 license. See [LICENSE](LICENSE) for details.
+
+## SonarQube new code
+
+The SonarQube project uses `Previous version`. CI passes the stable `version`
+field from the root `version.json` via `project-version-file: version.json`.
+Increment that version when starting the next development cycle. Computed NuGet
+build versions do not move the new-code baseline on every build. Pull requests
+are analyzed against their target branch independently of this version period.
