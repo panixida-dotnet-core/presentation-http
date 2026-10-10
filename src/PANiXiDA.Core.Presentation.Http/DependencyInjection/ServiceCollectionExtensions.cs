@@ -1,9 +1,7 @@
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Options;
 
 using PANiXiDA.Core.Application.Authentication.Abstractions;
 using PANiXiDA.Core.Presentation.Http.Authentication;
@@ -64,7 +62,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(moduleRegistry);
         services.AddHttpContextAccessor();
         services.TryAddScoped<ICurrentUser, HttpCurrentUser>();
-        services.AddCors();
+        services.AddCorsConfiguration();
         services.AddAuthenticationConfiguration(configuration);
         services.AddForwardedHeadersConfiguration(configuration);
         services.AddApiVersioningConfiguration();
@@ -100,9 +98,7 @@ public static class ServiceCollectionExtensions
         app.UseHttpsRedirection();
         app.UseRouting();
         LoggingMiddleware.UseEndpointScope(app);
-
-        var corsOptions = app.Services.GetRequiredService<IOptions<CorsOptions>>();
-        app.UseCors(corsOptions.Value.DefaultPolicyName);
+        app.UseCorsConfiguration();
         app.UseAuthenticationConfiguration();
         app.UseOpenApiConfiguration();
         app.MapHealthChecks("/health");
