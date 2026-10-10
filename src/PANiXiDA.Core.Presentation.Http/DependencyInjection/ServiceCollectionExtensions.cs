@@ -8,7 +8,6 @@ using Microsoft.Extensions.Options;
 using PANiXiDA.Core.Application.Authentication.Abstractions;
 using PANiXiDA.Core.Presentation.Http.Authentication;
 using PANiXiDA.Core.Presentation.Http.Configurations;
-using PANiXiDA.Core.Presentation.Http.Endpoints;
 using PANiXiDA.Core.Presentation.Http.Middlewares;
 using PANiXiDA.Core.Presentation.Http.Modularity;
 
@@ -104,32 +103,10 @@ public static class ServiceCollectionExtensions
 
         var corsOptions = app.Services.GetRequiredService<IOptions<CorsOptions>>();
         app.UseCors(corsOptions.Value.DefaultPolicyName);
-        app.UseAuthentication();
-        LoggingMiddleware.UseUserScope(app);
-        app.UseAuthorization();
+        app.UseAuthenticationConfiguration();
         app.UseOpenApiConfiguration();
         app.MapHealthChecks("/health");
-
-        var mappedAssemblies = new HashSet<Assembly>();
-        var moduleRegistry = app.Services.GetRequiredService<HttpModuleRegistry>();
-        var moduleAssemblies = moduleRegistry.Modules.Select(
-            static module => module.PresentationAssembly);
-
-        foreach (var presentationAssembly in moduleAssemblies)
-        {
-            EndpointRegistry.MapGroups(app, presentationAssembly);
-            mappedAssemblies.Add(presentationAssembly);
-        }
-
-        foreach (var assembly in assemblies)
-        {
-            if (!mappedAssemblies.Add(assembly))
-            {
-                continue;
-            }
-
-            EndpointRegistry.MapGroups(app, assembly);
-        }
+        app.UseEndpointConfiguration(assemblies);
 
         return app;
     }

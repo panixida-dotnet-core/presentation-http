@@ -1,8 +1,11 @@
+using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 using OpenIddict.Validation;
 using OpenIddict.Validation.AspNetCore;
+
+using PANiXiDA.Core.Presentation.Http.Middlewares;
 
 namespace PANiXiDA.Core.Presentation.Http.Configurations;
 
@@ -43,5 +46,14 @@ internal static class AuthenticationConfiguration
             });
 
         return services;
+    }
+
+    internal static WebApplication UseAuthenticationConfiguration(this WebApplication app)
+    {
+        app.UseAuthentication();
+        LoggingMiddleware.UseUserScope(app);
+        app.UseAuthorization();
+
+        return app;
     }
 }
