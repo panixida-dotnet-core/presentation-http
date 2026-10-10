@@ -20,7 +20,7 @@ It provides common Minimal API endpoint conventions, API versioning, OpenAPI set
 - `UseHttp` adds the default middleware pipeline and maps source-generated endpoint registrations.
 - HTTP JSON contracts enforce required constructor parameters, nullable annotations, and strict number handling.
 - Module assemblies can be mapped to separate OpenAPI documents and Scalar sources for each API version through the `HttpModules` configuration section.
-- Health checks are registered by `AddHttp` and exposed at `/health` by `UseHttp`.
+- Health checks are registered by `AddHttp` and exposed by `UseHttp` at a configurable path, defaulting to `/health`.
 - `IEndpointGroup` defines route, resource name, and API version metadata for Minimal API endpoint groups.
 - `IEndpoint<TGroup>` defines route, name, and summary metadata for endpoints that belong to a specific group.
 - The bundled source generator registers endpoints in deterministic type-name order.
@@ -175,11 +175,19 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 
 ## Health Checks
 
-`AddHttp` registers ASP.NET Core health check services, and `UseHttp` maps the health check endpoint at `/health`.
+`AddHttp` registers ASP.NET Core health check services, and `UseHttp` maps the health check endpoint at `/health` by default.
 
-```text
-GET /health
+Override the path in application configuration:
+
+```json
+{
+  "HealthCheckEndpointOptions": {
+    "Path": "/status/health"
+  }
+}
 ```
+
+The path must be nonblank and start with `/`; invalid values prevent startup. Only the configured path is mapped.
 
 Services can add their own checks after `AddHttp`.
 

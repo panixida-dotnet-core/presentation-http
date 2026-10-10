@@ -73,7 +73,7 @@ public static class ServiceCollectionExtensions
         services.AddExceptionHandler<BadHttpRequestExceptionHandler>();
         services.AddExceptionHandler<ExceptionHandler>();
         services.AddValidation();
-        services.AddHealthChecks();
+        services.AddHealthChecksConfiguration(configuration);
 
         return services;
     }
@@ -101,7 +101,7 @@ public static class ServiceCollectionExtensions
         app.UseCorsConfiguration();
         app.UseAuthenticationConfiguration();
         app.UseOpenApiConfiguration();
-        app.MapHealthChecks("/health");
+        app.UseHealthChecksConfiguration();
         app.UseEndpointConfiguration(assemblies);
 
         return app;
