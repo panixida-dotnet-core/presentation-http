@@ -45,6 +45,7 @@ public sealed class TokenIntrospectionTests
         profile.Name.ShouldBe("Test User");
         profile.Roles.ShouldBe(["Worker", "Reviewer"], ignoreOrder: true);
         profile.CanRead.ShouldBeTrue();
+        profile.AccessToken.ShouldBe("valid");
         allowed.StatusCode.ShouldBe(HttpStatusCode.OK);
         forbidden.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         identity.IntrospectedTokens.ShouldBe(["valid", "valid", "valid"]);
@@ -98,17 +99,24 @@ public sealed class TokenIntrospectionTests
         identity.IntrospectedTokens.ShouldBeEmpty();
     }
 
-    [Fact(DisplayName = "Public endpoints remain accessible without contacting Identity")]
-    public async Task PublicEndpoint_ShouldRemainAccessible()
+    [Theory(DisplayName = "Public endpoints expose no access token for absent or rejected authentication")]
+    [InlineData(null)]
+    [InlineData("invalid")]
+    [InlineData("expired")]
+    [InlineData("refresh")]
+    public async Task PublicEndpoint_ShouldNotExposeUnauthenticatedToken(string? token)
     {
         var identity = new IdentityServerHandler();
         await using var app = await CreateApplicationAsync(identity);
-        using var client = CreateClient(app);
+        using var client = CreateClient(app, token);
 
         var response = await client.GetAsync("/public", TestContext.Current.CancellationToken);
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        identity.IntrospectedTokens.ShouldBeEmpty();
+        var profile = await response.Content.ReadFromJsonAsync<Profile>(TestContext.Current.CancellationToken);
+        profile.ShouldNotBeNull();
+        profile.AccessToken.ShouldBeNull();
+        identity.IntrospectedTokens.ShouldBe(token is null ? [] : [token]);
     }
 
     [Fact(DisplayName = "Revocation takes effect on the next request")]
@@ -138,6 +146,7 @@ public sealed class TokenIntrospectionTests
         profile.ShouldNotBeNull();
         profile.Subject.ShouldBe("background-worker");
         profile.UserId.ShouldBeNull();
+        profile.AccessToken.ShouldBe("service");
     }
 
     [Fact(DisplayName = "An unavailable Identity cannot grant access")]
@@ -258,10 +267,12 @@ public sealed class TokenIntrospectionTests
             user.TryGetClaimValue<string>("sub", out var subject) ? subject : null,
             user.UserName,
             [.. user.Roles],
-            user.HasPermission("tasks.read"))).RequireAuthorization();
+            user.HasPermission("tasks.read"),
+            user.AccessToken)).RequireAuthorization();
         app.MapGet("/review", () => Results.Ok()).RequireAuthorization("review");
         app.MapGet("/admin", () => Results.Ok()).RequireAuthorization("admin");
-        app.MapGet("/public", () => Results.Ok()).AllowAnonymous();
+        app.MapGet("/public", (ICurrentUser user) => new Profile(
+            user.UserId, null, user.UserName, [.. user.Roles], false, user.AccessToken)).AllowAnonymous();
         app.MapPost("/json", (Payload payload) => TypedResults.Text(payload.Value)).RequireAuthorization();
         app.MapPost("/public-json", (Payload payload) => TypedResults.Text(payload.Value)).AllowAnonymous();
         app.MapPost("/form", ([FromForm] string value) => TypedResults.Text(value)).RequireAuthorization();
@@ -288,7 +299,8 @@ public sealed class TokenIntrospectionTests
         return client;
     }
 
-    private sealed record Profile(Guid? UserId, string? Subject, string? Name, string[] Roles, bool CanRead);
+    private sealed record Profile(
+        Guid? UserId, string? Subject, string? Name, string[] Roles, bool CanRead, string? AccessToken);
 
     private sealed record Payload(string Value);
 }

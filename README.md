@@ -94,6 +94,9 @@ matching claim with invariant culture and exact claim-type matching. Null, empty
 or whitespace `claimType` values return `false`.
 `HasPermission` matches individual `permission` values exactly; roles do not grant permissions.
 
+`AccessToken` reads the saved access token from the successful authentication result.
+It returns `null` when the caller is unauthenticated or no saved access token is available.
+
 Configure token validation as described below or use the host's authentication.
 Run authentication before invoking handlers. Background consumers must supply their
 own `ICurrentUser` for handlers that require authorization.
