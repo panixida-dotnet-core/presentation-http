@@ -1,6 +1,11 @@
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization.Policy;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+
+using OpenIddict.Abstractions;
 
 using PANiXiDA.Core.Application.Authentication.Abstractions;
 using PANiXiDA.Core.Presentation.Http.Authentication;
@@ -33,6 +38,69 @@ public sealed class HttpCurrentUserTests
         ]);
 
         AssertAnonymous(CreateUser(identity));
+    }
+
+    [Theory(DisplayName = "Access token is read from successful authentication for the current HTTP context")]
+    [InlineData(true, true, "validated-token")]
+    [InlineData(false, true, null)]
+    [InlineData(true, false, null)]
+    public void AccessToken_ShouldReadSuccessfulAuthenticationResult(
+        bool authenticated, bool hasToken, string? expectedToken)
+    {
+        var context = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity(authenticated ? "Bearer" : null))
+        };
+        context.Request.Headers.Authorization = "Bearer unvalidated-token";
+        var properties = new AuthenticationProperties();
+        if (hasToken)
+        {
+            properties.StoreTokens([new AuthenticationToken
+            {
+                Name = OpenIddictConstants.Parameters.AccessToken,
+                Value = "validated-token"
+            }]);
+        }
+        context.Features.Set<IAuthenticateResultFeature>(new TestAuthenticateResultFeature
+        {
+            AuthenticateResult = AuthenticateResult.Success(new AuthenticationTicket(context.User, properties, "Bearer"))
+        });
+        var accessor = new TestHttpContextAccessor { HttpContext = context };
+        var user = new HttpCurrentUser(accessor);
+
+        user.AccessToken.ShouldBe(expectedToken);
+
+        accessor.HttpContext = null;
+        user.AccessToken.ShouldBeNull();
+    }
+
+    [Theory(DisplayName = "Access token is absent without a successful authentication result")]
+    [InlineData(false, null)]
+    [InlineData(true, null)]
+    [InlineData(true, "none")]
+    [InlineData(true, "failed")]
+    public void AccessToken_ShouldIgnoreUnvalidatedHeader(bool hasFeature, string? outcome)
+    {
+        var context = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity("Bearer"))
+        };
+        context.Request.Headers.Authorization = "Bearer unvalidated-token";
+        if (hasFeature)
+        {
+            context.Features.Set<IAuthenticateResultFeature>(new TestAuthenticateResultFeature
+            {
+                AuthenticateResult = outcome switch
+                {
+                    "none" => AuthenticateResult.NoResult(),
+                    "failed" => AuthenticateResult.Fail("Invalid token."),
+                    _ => null
+                }
+            });
+        }
+        var user = new HttpCurrentUser(new TestHttpContextAccessor { HttpContext = context });
+
+        user.AccessToken.ShouldBeNull();
     }
 
     [Fact(DisplayName = "Current user reads raw JWT identity claims and distinct roles")]
@@ -184,7 +252,7 @@ public sealed class HttpCurrentUserTests
         var user = CreateUser(new ClaimsIdentity(
         [
             new Claim(ClaimTypes.Role, "files.create"),
-            new Claim(ApplicationClaimTypes.Section, "files.create"),
+            new Claim("section", "files.create"),
             new Claim(ApplicationClaimTypes.Permission, " ")
         ], "Bearer"));
 
@@ -220,6 +288,27 @@ public sealed class HttpCurrentUserTests
         }
     }
 
+    [Theory(DisplayName = "AddHttp replaces the default policy evaluator and preserves a custom evaluator")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AddHttp_ShouldPreserveCustomPolicyEvaluator(bool custom)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddAuthorization();
+        if (custom)
+        {
+            services.AddTransient<IPolicyEvaluator, CustomPolicyEvaluator>();
+        }
+
+        services.AddHttp(new ConfigurationBuilder().Build());
+        services.AddHttp(new ConfigurationBuilder().Build());
+        using var provider = services.BuildServiceProvider();
+
+        provider.GetRequiredService<IPolicyEvaluator>().GetType()
+            .ShouldBe(custom ? typeof(CustomPolicyEvaluator) : typeof(AccessTokenPolicyEvaluator));
+    }
+
     [Fact(DisplayName = "AddHttp preserves an existing current user registration")]
     public void AddHttp_ShouldPreserveCustomCurrentUser()
     {
@@ -238,6 +327,7 @@ public sealed class HttpCurrentUserTests
         user.IsAuthenticated.ShouldBeFalse();
         user.UserId.ShouldBeNull();
         user.UserName.ShouldBeNull();
+        user.AccessToken.ShouldBeNull();
         user.Roles.ShouldBeEmpty();
         user.HasPermission("files.create").ShouldBeFalse();
         user.TryGetClaimValue<Guid>("sub", out var userId).ShouldBeFalse();
@@ -256,4 +346,12 @@ public sealed class HttpCurrentUserTests
     {
         public HttpContext? HttpContext { get; set; }
     }
+
+    private sealed class TestAuthenticateResultFeature : IAuthenticateResultFeature
+    {
+        public AuthenticateResult? AuthenticateResult { get; set; }
+    }
+
+    private sealed class CustomPolicyEvaluator(IAuthorizationService authorizationService)
+        : PolicyEvaluator(authorizationService);
 }

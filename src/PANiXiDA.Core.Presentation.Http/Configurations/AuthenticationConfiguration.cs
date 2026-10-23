@@ -1,9 +1,13 @@
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Authorization.Policy;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 using OpenIddict.Validation;
 using OpenIddict.Validation.AspNetCore;
+
+using PANiXiDA.Core.Presentation.Http.Authentication;
 
 namespace PANiXiDA.Core.Presentation.Http.Configurations;
 
@@ -15,6 +19,11 @@ internal static class AuthenticationConfiguration
     {
         services.AddAuthentication();
         services.AddAuthorization();
+        var policyEvaluator = services.Last(service => service.ServiceType == typeof(IPolicyEvaluator));
+        if (policyEvaluator.ImplementationType == typeof(PolicyEvaluator))
+        {
+            services.Replace(ServiceDescriptor.Transient<IPolicyEvaluator, AccessTokenPolicyEvaluator>());
+        }
 
         var section = configuration.GetSection(nameof(OpenIddictValidationOptions));
         if (!section.Exists())

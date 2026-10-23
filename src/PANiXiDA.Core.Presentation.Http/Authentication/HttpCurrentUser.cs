@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
 
 using OpenIddict.Abstractions;
@@ -35,6 +36,24 @@ internal sealed class HttpCurrentUser(IHttpContextAccessor httpContextAccessor) 
     public string? UserName => Identities
         .Select(identity => identity.Name ?? identity.FindFirst("name")?.Value)
         .FirstOrDefault(name => name is not null);
+
+    public string? AccessToken
+    {
+        get
+        {
+            var context = httpContextAccessor.HttpContext;
+            if (context is null || !context.User.Identities.Any(identity => identity.IsAuthenticated))
+            {
+                return null;
+            }
+
+            var result = context.Features.Get<IAuthenticateResultFeature>()?.AuthenticateResult;
+
+            return result?.Succeeded == true
+                ? result.Properties.GetTokenValue(OpenIddictConstants.Parameters.AccessToken)
+                : null;
+        }
+    }
 
     public IReadOnlyCollection<string> Roles
     {

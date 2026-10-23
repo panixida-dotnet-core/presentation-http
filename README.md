@@ -42,7 +42,7 @@ Reference the package in each endpoint project with its analyzer assets enabled.
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="PANiXiDA.Core.Presentation.Http" Version="5.0.0" />
+  <PackageReference Include="PANiXiDA.Core.Presentation.Http" Version="5.1.1" />
 </ItemGroup>
 ```
 
@@ -93,6 +93,11 @@ role claim type and `role`, without duplicates. `TryGetClaimValue<T>` parses the
 matching claim with invariant culture and exact claim-type matching. Null, empty,
 or whitespace `claimType` values return `false`.
 `HasPermission` matches individual `permission` values exactly; roles do not grant permissions.
+
+`AccessToken` reads the saved access token from the successful authentication result.
+It returns `null` when the caller is unauthenticated or no saved access token is available.
+Explicit authentication policies preserve the token of the first authenticated
+identity in the combined principal, including Cookie/Bearer policies.
 
 Configure token validation as described below or use the host's authentication.
 Run authentication before invoking handlers. Background consumers must supply their
