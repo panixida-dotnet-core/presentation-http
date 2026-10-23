@@ -27,7 +27,7 @@ internal sealed class AccessTokenPolicyEvaluator(IAuthorizationService authoriza
                 continue;
             }
 
-            var token = original.Properties?.GetTokenValue(OpenIddictConstants.Parameters.AccessToken);
+            var token = original.Properties.GetTokenValue(OpenIddictConstants.Parameters.AccessToken);
             if (token is not null)
             {
                 properties.StoreTokens([new AuthenticationToken

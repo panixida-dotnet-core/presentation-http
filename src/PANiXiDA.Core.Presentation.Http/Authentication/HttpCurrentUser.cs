@@ -41,17 +41,16 @@ internal sealed class HttpCurrentUser(IHttpContextAccessor httpContextAccessor) 
     {
         get
         {
-            if (!IsAuthenticated)
+            var context = httpContextAccessor.HttpContext;
+            if (context is null || !context.User.Identities.Any(identity => identity.IsAuthenticated))
             {
                 return null;
             }
 
-            var result = httpContextAccessor.HttpContext?
-                .Features.Get<IAuthenticateResultFeature>()?
-                .AuthenticateResult;
+            var result = context.Features.Get<IAuthenticateResultFeature>()?.AuthenticateResult;
 
             return result?.Succeeded == true
-                ? result.Properties?.GetTokenValue(OpenIddictConstants.Parameters.AccessToken)
+                ? result.Properties.GetTokenValue(OpenIddictConstants.Parameters.AccessToken)
                 : null;
         }
     }

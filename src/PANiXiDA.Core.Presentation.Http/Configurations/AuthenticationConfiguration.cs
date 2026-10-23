@@ -19,7 +19,8 @@ internal static class AuthenticationConfiguration
     {
         services.AddAuthentication();
         services.AddAuthorization();
-        if (services.Last(service => service.ServiceType == typeof(IPolicyEvaluator)).ImplementationType == typeof(PolicyEvaluator))
+        var policyEvaluator = services.Last(service => service.ServiceType == typeof(IPolicyEvaluator));
+        if (policyEvaluator.ImplementationType == typeof(PolicyEvaluator))
         {
             services.Replace(ServiceDescriptor.Transient<IPolicyEvaluator, AccessTokenPolicyEvaluator>());
         }
