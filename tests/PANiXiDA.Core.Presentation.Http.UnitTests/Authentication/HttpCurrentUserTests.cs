@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization.Policy;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -286,6 +288,27 @@ public sealed class HttpCurrentUserTests
         }
     }
 
+    [Theory(DisplayName = "AddHttp replaces the default policy evaluator and preserves a custom evaluator")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AddHttp_ShouldPreserveCustomPolicyEvaluator(bool custom)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddAuthorization();
+        if (custom)
+        {
+            services.AddTransient<IPolicyEvaluator, CustomPolicyEvaluator>();
+        }
+
+        services.AddHttp(new ConfigurationBuilder().Build());
+        services.AddHttp(new ConfigurationBuilder().Build());
+        using var provider = services.BuildServiceProvider();
+
+        provider.GetRequiredService<IPolicyEvaluator>().GetType()
+            .ShouldBe(custom ? typeof(CustomPolicyEvaluator) : typeof(AccessTokenPolicyEvaluator));
+    }
+
     [Fact(DisplayName = "AddHttp preserves an existing current user registration")]
     public void AddHttp_ShouldPreserveCustomCurrentUser()
     {
@@ -328,4 +351,7 @@ public sealed class HttpCurrentUserTests
     {
         public AuthenticateResult? AuthenticateResult { get; set; }
     }
+
+    private sealed class CustomPolicyEvaluator(IAuthorizationService authorizationService)
+        : PolicyEvaluator(authorizationService);
 }
