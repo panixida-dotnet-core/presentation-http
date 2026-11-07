@@ -88,7 +88,6 @@ public sealed class ScalarOperationOrderingTests
     [Theory(DisplayName = "Scalar preserves explicit host operation sorter and JavaScript configuration")]
     [InlineData(false)]
     [InlineData(true)]
-    [Obsolete]
     public async Task UseOpenApiConfiguration_ShouldPreserveHostConfiguration(bool useJavaScript)
     {
         await using var app = await CreateApplicationAsync(configureScalar: options =>
@@ -99,7 +98,7 @@ public sealed class ScalarOperationOrderingTests
             }
             else
             {
-                options.WithOperationSorter(OperationSorter.Method);
+                options.OperationSorter = OperationSorter.Method;
             }
         });
         using var client = CreateClient(app);
@@ -173,7 +172,7 @@ public sealed class ScalarOperationOrderingTests
         group.MapGet("", static () => TypedResults.Ok());
         group.MapPost("/", static () => TypedResults.Created("/api/v1/items/42"));
         group.MapPost("/personal", static () => TypedResults.Created("/api/v1/items/42"));
-        group.MapPost("/{id}/complete", static () => TypedResults.NoContent());
+        group.MapPost("/{id}/complete", static (string id) => TypedResults.Ok(id));
         group.MapPost("/token", static () => TypedResults.Ok());
         app.UseOpenApiConfiguration();
         await app.StartAsync(TestContext.Current.CancellationToken);
