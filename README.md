@@ -387,7 +387,8 @@ normalized when matching creation paths.
 Set `ScalarConfiguration:SortOperations` to `false` to use Scalar's default operation order.
 An explicitly configured Scalar operation sorter or custom JavaScript configuration takes
 precedence over the library's sorter. The configuration module at `/scalar/operation-order.js`
-is mapped only in `Development` and excluded from OpenAPI.
+is mapped only in `Development` and excluded from OpenAPI. Relative module URLs also
+support applications hosted under a path base.
 
 ### Bearer authentication
 

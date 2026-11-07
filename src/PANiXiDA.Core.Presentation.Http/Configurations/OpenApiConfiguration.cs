@@ -107,7 +107,7 @@ internal static class OpenApiConfiguration
                     && options.OperationSorter is null
                     && string.IsNullOrWhiteSpace(options.JavaScriptConfiguration))
                 {
-                    options.WithJavaScriptConfiguration(ScalarOperationOrdering.ConfigurationPath);
+                    options.WithJavaScriptConfiguration(ScalarOperationOrdering.ConfigurationPath.TrimStart('/'));
                 }
 
                 var documents = app.Services.GetRequiredService<HttpModuleApiVersionDescriptionProvider>();
