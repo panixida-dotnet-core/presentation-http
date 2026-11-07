@@ -8,5 +8,7 @@ internal sealed class ScalarOptions
 
     public string? Favicon { get; set; }
 
+    public bool SortOperations { get; set; } = true;
+
     public string[] BearerAuthenticationSchemes { get; set; } = [];
 }

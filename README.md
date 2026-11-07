@@ -377,6 +377,18 @@ In `Development`, `UseHttp` exposes:
 
 OpenAPI registration also enables Scalar transformers for Scalar-specific document extensions.
 
+### Operation order
+
+Scalar orders operations within each section as `GET`, `POST`, `PUT`, `PATCH`, `DELETE`.
+POST operations declaring `201 Created` appear before other POST actions; paths determine
+order within each group. Other HTTP methods follow these groups. Trailing slashes are
+normalized when matching creation paths.
+
+Set `ScalarConfiguration:SortOperations` to `false` to use Scalar's default operation order.
+An explicitly configured Scalar operation sorter or custom JavaScript configuration takes
+precedence over the library's sorter. The configuration module at `/scalar/operation-order.js`
+is mapped only in `Development` and excluded from OpenAPI.
+
 ### Bearer authentication
 
 `AddHttp` adds an HTTP `Bearer` security requirement to operations whose resolved authorization
