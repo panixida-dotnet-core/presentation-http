@@ -2,6 +2,7 @@ using Asp.Versioning.ApiExplorer;
 using Asp.Versioning.OpenApi;
 
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.ApiExplorer;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
@@ -82,6 +83,12 @@ internal static class OpenApiConfiguration
                 app.MapStaticAssets().ShortCircuit();
             }
 
+            if (scalarOptions.SortOperations)
+            {
+                app.MapGet(ScalarOperationOrdering.ConfigurationPath, ScalarOperationOrdering.CreateConfiguration)
+                    .ExcludeFromDescription();
+            }
+
             app.MapOpenApi()
                 .WithDocumentPerVersion();
             app.MapScalarApiReference(options =>
@@ -94,6 +101,13 @@ internal static class OpenApiConfiguration
                 if (!string.IsNullOrWhiteSpace(scalarFavicon))
                 {
                     options.WithFavicon(scalarFavicon);
+                }
+
+                if (scalarOptions.SortOperations
+                    && options.OperationSorter is null
+                    && string.IsNullOrWhiteSpace(options.JavaScriptConfiguration))
+                {
+                    options.WithJavaScriptConfiguration(ScalarOperationOrdering.ConfigurationPath.TrimStart('/'));
                 }
 
                 var documents = app.Services.GetRequiredService<HttpModuleApiVersionDescriptionProvider>();
