@@ -339,6 +339,8 @@ HTTP completion logs include the final status and request context: 4xx (includin
 
 Completion logging also covers CORS preflight, authentication/authorization failures, and short-circuited endpoints. Scopes capture the route after routing and the authenticated `sub` claim (falling back to `NameIdentifier`) after authentication. These snapshots stay unchanged during deferred log export; completion logs capture the final request context.
 
+The `url.query` scope attribute replaces every `access_token` value with `[REDACTED]`, including repeated parameters and case-insensitive or percent-encoded parameter names. Other query parameters retain their original encoding and order. Redaction changes only this package's log scope; authentication and endpoints receive the original request. Configure framework, proxy, and application logging separately to prevent those components from recording raw tokens.
+
 | Error type | HTTP status | Title |
 | --- | ---: | --- |
 | `Validation` | 400 | `One or more validation errors occurred.` |
