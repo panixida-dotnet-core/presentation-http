@@ -54,6 +54,7 @@ public sealed class RequestCompletionLoggingTests
         app.UseHttp();
         app.MapGet("/scope/{id}", (int id, HttpContext context) =>
         {
+            context.Request.Query["access_token"].ToArray().ShouldBe(["secret", "other-secret"]);
             context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("ScopeProbe").LogInformation("Handling");
             if (expectedStatus == 400)
             {
@@ -74,7 +75,7 @@ public sealed class RequestCompletionLoggingTests
         var address = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.Single();
         using var client = new HttpClient { BaseAddress = new Uri(address) };
 
-        using var response = await client.GetAsync("/scope/42", TestContext.Current.CancellationToken);
+        using var response = await client.GetAsync("/scope/42?access_token=secret&status=active&ACCESS_TOKEN=other-secret", TestContext.Current.CancellationToken);
         await completed.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
         response.StatusCode.ShouldBe((HttpStatusCode)expectedStatus);
@@ -88,6 +89,8 @@ public sealed class RequestCompletionLoggingTests
             record.Attributes.Single(pair => pair.Key == "http.route").Value.ShouldBe("/scope/{id}");
             record.Attributes.Single(pair => pair.Key == "aspnetcore.endpoint.display_name").Value.ShouldBe("Scope endpoint");
             record.Attributes.Single(pair => pair.Key == "url.path").Value.ShouldBe("/scope/42");
+            record.Attributes.Single(pair => pair.Key == "url.query").Value.ShouldBe(
+                "?access_token=[REDACTED]&status=active&ACCESS_TOKEN=[REDACTED]");
             if (record.Message != "Authenticating")
             {
                 record.Attributes.Single(pair => pair.Key == "enduser.id").Value.ShouldBe("user-42");

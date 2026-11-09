@@ -10,6 +10,32 @@ namespace PANiXiDA.Core.Presentation.Http.UnitTests.Logging;
 
 public sealed class HttpRequestLogScopeTests
 {
+    [Theory(DisplayName = "Request scopes redact every access token while preserving the request and other query parameters")]
+    [InlineData(null, "")]
+    [InlineData("", "")]
+    [InlineData("?", "?")]
+    [InlineData("?status=active&flag&name=a+b", "?status=active&flag&name=a+b")]
+    [InlineData("?access_token=secret", "?access_token=[REDACTED]")]
+    [InlineData("?ACCESS_TOKEN=secret", "?ACCESS_TOKEN=[REDACTED]")]
+    [InlineData("?%61ccess%5ftoken=secret", "?%61ccess%5ftoken=[REDACTED]")]
+    [InlineData("?status=active&access_token=a%26b%3Dc&name=a+b", "?status=active&access_token=[REDACTED]&name=a+b")]
+    [InlineData("?access_token=first&access_token=second", "?access_token=[REDACTED]&access_token=[REDACTED]")]
+    [InlineData("?access_token=&access_token&flag", "?access_token=[REDACTED]&access_token=[REDACTED]&flag")]
+    [InlineData("?&&access_token=secret&&status=a%20b&", "?&&access_token=[REDACTED]&&status=a%20b&")]
+    [InlineData("?other_access_token=visible&access_token_extra=visible&name=access_token", "?other_access_token=visible&access_token_extra=visible&name=access_token")]
+    [InlineData("?%=value&access_token=secret", "?%=value&access_token=[REDACTED]")]
+    public void Create_ShouldRedactAccessTokens(string? query, string? expected)
+    {
+        var context = new DefaultHttpContext();
+        context.Request.QueryString = new QueryString(query);
+        var original = context.Request.QueryString;
+
+        var scope = HttpRequestLogScope.Create(context);
+
+        scope["url.query"].ShouldBe(expected);
+        context.Request.QueryString.ShouldBe(original);
+    }
+
     [Theory(DisplayName = "User scope uses the authenticated subject with a NameIdentifier fallback")]
     [InlineData("subject-id", "mapped-id", "subject-id")]
     [InlineData("subject-id", null, "subject-id")]
