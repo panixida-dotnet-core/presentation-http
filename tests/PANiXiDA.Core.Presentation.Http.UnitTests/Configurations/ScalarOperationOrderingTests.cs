@@ -10,6 +10,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 using PANiXiDA.Core.Presentation.Http.Configurations;
+using PANiXiDA.Core.Presentation.Scalar.DependencyInjection;
 using PANiXiDA.Core.Presentation.Http.Modularity;
 
 using Scalar.AspNetCore;
@@ -17,12 +18,13 @@ using Scalar.AspNetCore;
 using System.Net;
 using System.Text.Json;
 
-using ScalarOptions = PANiXiDA.Core.Presentation.Http.Options.Scalar.ScalarOptions;
+using ScalarOptions = PANiXiDA.Core.Presentation.Scalar.Options.ApiDocumentationOptions;
 
 namespace PANiXiDA.Core.Presentation.Http.UnitTests.Configurations;
 
 public sealed class ScalarOperationOrderingTests
 {
+    private const string OrderingConfigurationPath = "/scalar/operation-order.js";
     [Theory(DisplayName = "Scalar orders operations using creation metadata in default and module documents")]
     [InlineData(false)]
     [InlineData(true)]
@@ -33,12 +35,12 @@ public sealed class ScalarOperationOrderingTests
 
         var scalar = await client.GetStringAsync("/scalar", TestContext.Current.CancellationToken);
         using var response = await client.GetAsync(
-            ScalarOperationOrdering.ConfigurationPath, TestContext.Current.CancellationToken);
+            OrderingConfigurationPath, TestContext.Current.CancellationToken);
         var configuration = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         var document = await client.GetStringAsync(
             useModule ? "/openapi/items-v1.json" : "/openapi/v1.json", TestContext.Current.CancellationToken);
 
-        scalar.ShouldContain(ScalarOperationOrdering.ConfigurationPath.TrimStart('/'));
+        scalar.ShouldContain(OrderingConfigurationPath.TrimStart('/'));
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         response.Content.Headers.ContentType!.MediaType.ShouldBe("text/javascript");
         configuration.ShouldContain(JsonSerializer.Serialize("/api/v1/items"));
@@ -48,7 +50,7 @@ public sealed class ScalarOperationOrderingTests
         configuration.ShouldNotContain(JsonSerializer.Serialize("/api/v1/items/token"));
         using var parsed = JsonDocument.Parse(document);
         parsed.RootElement.GetProperty("paths")
-            .TryGetProperty(ScalarOperationOrdering.ConfigurationPath, out _).ShouldBeFalse();
+            .TryGetProperty(OrderingConfigurationPath, out _).ShouldBeFalse();
     }
 
     [Fact(DisplayName = "Scalar operation ordering supports applications hosted under a path base")]
@@ -59,7 +61,7 @@ public sealed class ScalarOperationOrderingTests
 
         var scalar = await client.GetStringAsync("/gateway/scalar", TestContext.Current.CancellationToken);
         using var response = await client.GetAsync(
-            "/gateway" + ScalarOperationOrdering.ConfigurationPath, TestContext.Current.CancellationToken);
+            "/gateway" + OrderingConfigurationPath, TestContext.Current.CancellationToken);
 
         scalar.ShouldContain("'scalar/operation-order.js'");
         scalar.ShouldNotContain("'/scalar/operation-order.js'");
@@ -80,8 +82,8 @@ public sealed class ScalarOperationOrderingTests
             .OfType<RouteEndpoint>()
             .Select(endpoint => endpoint.RoutePattern.RawText);
 
-        scalar.ShouldNotContain(ScalarOperationOrdering.ConfigurationPath.TrimStart('/'));
-        routePatterns.ShouldNotContain(ScalarOperationOrdering.ConfigurationPath);
+        scalar.ShouldNotContain(OrderingConfigurationPath.TrimStart('/'));
+        routePatterns.ShouldNotContain(OrderingConfigurationPath);
         document.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
@@ -105,7 +107,7 @@ public sealed class ScalarOperationOrderingTests
 
         var scalar = await client.GetStringAsync("/scalar", TestContext.Current.CancellationToken);
 
-        scalar.ShouldNotContain(ScalarOperationOrdering.ConfigurationPath.TrimStart('/'));
+        scalar.ShouldNotContain(OrderingConfigurationPath.TrimStart('/'));
         scalar.ShouldContain(useJavaScript ? "/custom.js" : "\"operationsSorter\":\"method\"");
     }
 
@@ -118,7 +120,7 @@ public sealed class ScalarOperationOrderingTests
         using var client = CreateClient(app);
 
         using var response = await client.GetAsync(
-            ScalarOperationOrdering.ConfigurationPath, TestContext.Current.CancellationToken);
+            OrderingConfigurationPath, TestContext.Current.CancellationToken);
         using var scalar = await client.GetAsync("/scalar", TestContext.Current.CancellationToken);
         using var business = await client.GetAsync("/api/v1/items", TestContext.Current.CancellationToken);
 
@@ -131,7 +133,7 @@ public sealed class ScalarOperationOrderingTests
         bool useModule = false,
         bool? sortOperations = null,
         string environmentName = "Development",
-        Action<Scalar.AspNetCore.ScalarOptions>? configureScalar = null,
+        Action<global::Scalar.AspNetCore.ScalarOptions>? configureScalar = null,
         string? pathBase = null)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
@@ -154,6 +156,7 @@ public sealed class ScalarOperationOrderingTests
         builder.Services.AddApiVersioningConfiguration();
         builder.Services.AddJsonConfiguration();
         builder.Services.AddOpenApiConfiguration(builder.Configuration, useModule ? [module] : []);
+        builder.Services.AddApiDocumentation(builder.Configuration);
         var app = builder.Build();
         if (pathBase is not null)
         {
@@ -175,6 +178,7 @@ public sealed class ScalarOperationOrderingTests
         group.MapPost("/{id}/complete", static (string id) => TypedResults.Ok(id));
         group.MapPost("/token", static () => TypedResults.Ok());
         app.UseOpenApiConfiguration();
+        app.UseApiDocumentation();
         await app.StartAsync(TestContext.Current.CancellationToken);
         return app;
     }

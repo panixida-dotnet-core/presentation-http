@@ -2,7 +2,6 @@ using Asp.Versioning.ApiExplorer;
 using Asp.Versioning.OpenApi;
 
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.ApiExplorer;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
@@ -14,8 +13,9 @@ using Microsoft.Extensions.Options;
 using PANiXiDA.Core.Presentation.Http.Modularity;
 using PANiXiDA.Core.Presentation.Http.Options.Scalar;
 using PANiXiDA.Core.Presentation.Http.Transformers;
+using PANiXiDA.Core.ApiDocumentation.DependencyInjection;
 
-using Scalar.AspNetCore;
+
 
 using System.Diagnostics.CodeAnalysis;
 
@@ -39,7 +39,7 @@ internal static class OpenApiConfiguration
                 options =>
             {
                 var documents = serviceProvider.GetRequiredService<HttpModuleApiVersionDescriptionProvider>();
-                options.Document.AddScalarTransformers();
+
                 options.Document.AddOperationTransformer<SortFieldArrayOpenApiOperationTransformer>();
                 options.Document.AddOperationTransformer<BearerSecurityOpenApiOperationTransformer>();
                 options.Document.ShouldInclude = description =>
@@ -65,57 +65,17 @@ internal static class OpenApiConfiguration
         services.AddOptions<ScalarOptions>()
             .Bind(configuration.GetSection(ScalarOptions.SectionName))
             .ValidateOnStart();
-
+        services.AddApiDocumentSource<HttpApiDocumentSource>();
         return services;
     }
 
     internal static WebApplication UseOpenApiConfiguration(this WebApplication app)
     {
-        if (app.Environment.IsDevelopment())
+        var scalarOptions = app.Services.GetRequiredService<IOptions<ScalarOptions>>().Value;
+        if (scalarOptions.Enabled ?? app.Environment.IsDevelopment())
         {
-            var scalarOptions = app.Services
-                .GetRequiredService<IOptions<ScalarOptions>>()
-                .Value;
-            var scalarTitle = scalarOptions.Title;
-            var scalarFavicon = scalarOptions.Favicon;
-            if (!string.IsNullOrWhiteSpace(scalarFavicon))
-            {
-                app.MapStaticAssets().ShortCircuit();
-            }
-
-            if (scalarOptions.SortOperations)
-            {
-                app.MapGet(ScalarOperationOrdering.ConfigurationPath, ScalarOperationOrdering.CreateConfiguration)
-                    .ExcludeFromDescription();
-            }
-
             app.MapOpenApi()
                 .WithDocumentPerVersion();
-            app.MapScalarApiReference(options =>
-            {
-                if (!string.IsNullOrWhiteSpace(scalarTitle))
-                {
-                    options.WithTitle(scalarTitle);
-                }
-
-                if (!string.IsNullOrWhiteSpace(scalarFavicon))
-                {
-                    options.WithFavicon(scalarFavicon);
-                }
-
-                if (scalarOptions.SortOperations
-                    && options.OperationSorter is null
-                    && string.IsNullOrWhiteSpace(options.JavaScriptConfiguration))
-                {
-                    options.WithJavaScriptConfiguration(ScalarOperationOrdering.ConfigurationPath.TrimStart('/'));
-                }
-
-                var documents = app.Services.GetRequiredService<HttpModuleApiVersionDescriptionProvider>();
-                options.AddDocuments(documents.ApiVersionDescriptions.Select(description =>
-                    new ScalarDocument(
-                        description.GroupName,
-                        documents.GetDocumentTitle(description))));
-            });
         }
 
         return app;

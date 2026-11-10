@@ -8,7 +8,7 @@
 
         <PackageId>PANiXiDA.Core.Presentation.Http</PackageId>
         <Description>Reusable HTTP presentation layer abstractions, endpoint conventions, and ASP.NET Core integration utilities for PANiXiDA applications.</Description>
-        <PackageTags>PANiXiDA;Core;Presentation;Http;AspNetCore;WebApi;Endpoints;MinimalApi;ApiVersioning;Scalar;OpenApi;ProblemDetails</PackageTags>
+        <PackageTags>PANiXiDA;Core;Presentation;Http;AspNetCore;WebApi;Endpoints;MinimalApi;ApiVersioning;OpenApi;ProblemDetails</PackageTags>
 
         <RepositoryUrl>https://github.com/panixida-dotnet-core/presentation-http</RepositoryUrl>
         <PackageProjectUrl>https://github.com/panixida-dotnet-core/presentation-http</PackageProjectUrl>
@@ -28,9 +28,10 @@
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
         <PackageReference Include="PANiXiDA.Core.Application" />
+        <PackageReference Include="PANiXiDA.Core.ApiDocumentation" />
         <PackageReference Include="PANiXiDA.Core.ResultPattern" />
-        <PackageReference Include="Scalar.AspNetCore" />
-        <PackageReference Include="Scalar.AspNetCore.Microsoft" />
+        
+        
     </ItemGroup>
 
     <ItemGroup>

@@ -84,6 +84,11 @@ internal sealed class HttpModuleApiVersionDescriptionProvider(
                 item.RelativePath == description.RelativePath));
     }
 
+    internal string GetDocumentModuleName(ApiVersionDescription description)
+    {
+        return GetModule(description)?.Name ?? "api";
+    }
+
     internal string GetDocumentTitle(ApiVersionDescription description)
     {
         var module = GetModule(description);

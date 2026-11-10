@@ -15,6 +15,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 using PANiXiDA.Core.Presentation.Http.Configurations;
+using PANiXiDA.Core.Presentation.Scalar.DependencyInjection;
 using PANiXiDA.Core.Presentation.Http.DependencyInjection;
 using PANiXiDA.Core.Presentation.Http.Endpoints;
 using PANiXiDA.Core.Presentation.Http.Modularity;
@@ -45,35 +46,15 @@ public sealed class OpenApiConfigurationTests
     {
         var builder = WebApplication.CreateBuilder();
         builder.Services.AddHttp(builder.Configuration);
+        builder.Services.AddApiDocumentation(builder.Configuration);
         using var app = builder.Build();
         var options = app.Services.GetRequiredService<IOptionsMonitor<OpenApiOptions>>().Get("v1");
 
         options.ShouldNotBeNull();
     }
 
-    [Fact(DisplayName = "OpenAPI configuration binds Scalar API reference title and favicon")]
-    public void AddOpenApiConfiguration_ShouldBindScalarApiReferenceTitleAndFavicon()
-    {
-        var services = new ServiceCollection();
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                [ScalarOptions.SectionName + ":" + nameof(ScalarOptions.Title)] = "Orders API Reference",
-                [ScalarOptions.SectionName + ":" + nameof(ScalarOptions.Favicon)] = "/favicon.svg"
-            })
-            .Build();
-
-        services.AddOpenApiConfiguration(configuration, []);
-
-        using var serviceProvider = services.BuildServiceProvider();
-        var options = serviceProvider.GetRequiredService<IOptions<ScalarOptions>>().Value;
-
-        options.Title.ShouldBe("Orders API Reference");
-        options.Favicon.ShouldBe("/favicon.svg");
-    }
-
-    [Fact(DisplayName = "OpenAPI configuration maps the specification and Scalar endpoints in Development")]
-    public void UseOpenApiConfiguration_ShouldMapOpenApiAndScalarEndpointsInDevelopment()
+    [Fact(DisplayName = "OpenAPI configuration maps the specification without hosting Scalar")]
+    public void UseOpenApiConfiguration_ShouldMapOnlyOpenApiEndpointInDevelopment()
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
@@ -82,6 +63,7 @@ public sealed class OpenApiConfigurationTests
 
         builder.Services.AddOpenApiConfiguration(builder.Configuration, []);
 
+        builder.Services.AddApiDocumentation(builder.Configuration);
         using var app = builder.Build();
 
         var result = app.UseOpenApiConfiguration();
@@ -90,7 +72,7 @@ public sealed class OpenApiConfigurationTests
         var routePatterns = GetRoutePatterns(app);
 
         routePatterns.ShouldContain("/openapi/{documentName}.json");
-        routePatterns.ShouldContain("/scalar/{documentName?}");
+        routePatterns.ShouldNotContain("/scalar/{documentName?}");
     }
 
     [Fact(DisplayName = "OpenAPI configuration uses configured Scalar document title in Development")]
@@ -99,7 +81,7 @@ public sealed class OpenApiConfigurationTests
         await using var app = await CreateStartedApplicationAsync(
             new Dictionary<string, string?>
             {
-                [ScalarOptions.SectionName + ":" + nameof(ScalarOptions.Title)] = "Orders API Reference"
+                [ScalarOptions.SectionName + ":" + "Title"] = "Orders API Reference"
             },
             TestContext.Current.CancellationToken);
         using var client = CreateClient(app);
@@ -123,7 +105,7 @@ public sealed class OpenApiConfigurationTests
         await using var app = await CreateStartedApplicationAsync(
             new Dictionary<string, string?>
             {
-                [ScalarOptions.SectionName + ":" + nameof(ScalarOptions.Favicon)] = "/favicon.svg"
+                [ScalarOptions.SectionName + ":" + "Favicon"] = "/favicon.svg"
             },
             TestContext.Current.CancellationToken,
             configureApplication: application =>
@@ -172,7 +154,7 @@ public sealed class OpenApiConfigurationTests
         await using var app = await CreateStartedApplicationAsync(
             new Dictionary<string, string?>
             {
-                [ScalarOptions.SectionName + ":" + nameof(ScalarOptions.Favicon)] = "/favicon.svg"
+                [ScalarOptions.SectionName + ":" + "Favicon"] = "/favicon.svg"
             },
             TestContext.Current.CancellationToken,
             configureApplication: application =>
@@ -220,7 +202,7 @@ public sealed class OpenApiConfigurationTests
         await using var app = await CreateStartedApplicationAsync(
             new Dictionary<string, string?>
             {
-                [ScalarOptions.SectionName + ":" + nameof(ScalarOptions.Favicon)] = favicon
+                [ScalarOptions.SectionName + ":" + "Favicon"] = favicon
             },
             TestContext.Current.CancellationToken);
         using var client = CreateClient(app);
@@ -400,6 +382,7 @@ public sealed class OpenApiConfigurationTests
         builder.Configuration.AddInMemoryCollection(CreateModuleConfigurationValues(
             (moduleAssembly, "identity", "Identity endpoints")));
         builder.Services.AddHttp(builder.Configuration, moduleAssembly);
+        builder.Services.AddApiDocumentation(builder.Configuration);
         await using var app = builder.Build();
         app.UseOpenApiConfiguration();
         var group = app.MapGroup("/connect");
@@ -425,6 +408,7 @@ public sealed class OpenApiConfigurationTests
                 .MapToApiVersion(new ApiVersion(2, 0));
         }
 
+        app.UseApiDocumentation();
         await app.StartAsync(TestContext.Current.CancellationToken);
         using var client = CreateClient(app);
 
@@ -484,6 +468,7 @@ public sealed class OpenApiConfigurationTests
         builder.Services.AddHttp(
             builder.Configuration,
             useVersionedModule ? [commonModuleAssembly, versionedModuleAssembly] : [commonModuleAssembly]);
+        builder.Services.AddApiDocumentation(builder.Configuration);
         await using var app = builder.Build();
         app.MapGet("/connect", static () => "connect")
             .WithGroupName(commonDocumentName)
@@ -504,6 +489,7 @@ public sealed class OpenApiConfigurationTests
             endpoint.WithGroupName("orders");
         }
 
+        app.UseApiDocumentation();
         await app.StartAsync(TestContext.Current.CancellationToken);
         var provider = app.Services.GetRequiredService<IApiVersionDescriptionProvider>();
 
@@ -615,6 +601,7 @@ public sealed class OpenApiConfigurationTests
         builder.Services.AddHttp(builder.Configuration);
         builder.Services.Configure<ApiVersioningOptions>(options =>
             options.DefaultApiVersion = new ApiVersion(defaultVersion, 0));
+        builder.Services.AddApiDocumentation(builder.Configuration);
         await using var app = builder.Build();
         app.UseHttp();
         var endpoint = app.MapGet("/connect", static () => "connect");
@@ -633,6 +620,7 @@ public sealed class OpenApiConfigurationTests
             .WithApiVersionSet(versions)
             .MapToApiVersion(new ApiVersion(3, 0))
             .ExcludeFromDescription();
+        app.UseApiDocumentation();
         await app.StartAsync(TestContext.Current.CancellationToken);
         using var client = CreateClient(app);
 
@@ -690,10 +678,11 @@ public sealed class OpenApiConfigurationTests
 
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            [ScalarOptions.SectionName + ":" + nameof(ScalarOptions.Favicon)] = "/favicon.svg"
+            [ScalarOptions.SectionName + ":" + "Favicon"] = "/favicon.svg"
         });
         builder.Services.AddOpenApiConfiguration(builder.Configuration, []);
 
+        builder.Services.AddApiDocumentation(builder.Configuration);
         using var app = builder.Build();
 
         var result = app.UseOpenApiConfiguration();
@@ -741,11 +730,13 @@ public sealed class OpenApiConfigurationTests
         builder.Services.AddHttp(builder.Configuration);
         configureBuilder?.Invoke(builder);
 
+        builder.Services.AddApiDocumentation(builder.Configuration);
         var app = builder.Build();
         configureApplication?.Invoke(app);
         app.UseHttp();
         configureAfterHttp?.Invoke(app);
 
+        app.UseApiDocumentation();
         await app.StartAsync(cancellationToken);
 
         return app;
@@ -766,10 +757,12 @@ public sealed class OpenApiConfigurationTests
         builder.Configuration.AddInMemoryCollection(configurationValues);
         builder.Services.AddHttp(builder.Configuration, moduleAssemblies);
 
+        builder.Services.AddApiDocumentation(builder.Configuration);
         var app = builder.Build();
         app.UseHttp(typeof(OrderedEndpointGroup).Assembly);
         configureEndpoints?.Invoke(app);
 
+        app.UseApiDocumentation();
         await app.StartAsync(cancellationToken);
 
         return app;
@@ -787,6 +780,7 @@ public sealed class OpenApiConfigurationTests
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         builder.Services.AddHttp(builder.Configuration);
 
+        builder.Services.AddApiDocumentation(builder.Configuration);
         var app = builder.Build();
         var endpoint = app.MapGet("/numeric", static () => new NumericResponse(Count: 1));
 
@@ -798,6 +792,7 @@ public sealed class OpenApiConfigurationTests
 
         app.UseHttp();
 
+        app.UseApiDocumentation();
         await app.StartAsync(cancellationToken);
 
         return app;

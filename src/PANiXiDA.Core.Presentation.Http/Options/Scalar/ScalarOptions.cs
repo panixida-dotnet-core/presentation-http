@@ -4,11 +4,9 @@ internal sealed class ScalarOptions
 {
     public const string SectionName = "ScalarConfiguration";
 
-    public string? Title { get; set; }
+    public bool? Enabled { get; set; }
 
-    public string? Favicon { get; set; }
 
-    public bool SortOperations { get; set; } = true;
 
     public string[] BearerAuthenticationSchemes { get; set; } = [];
 }
