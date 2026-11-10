@@ -30,8 +30,8 @@
         <PackageReference Include="PANiXiDA.Core.Application" />
         <PackageReference Include="PANiXiDA.Core.ApiDocumentation" />
         <PackageReference Include="PANiXiDA.Core.ResultPattern" />
-        
-        
+
+
     </ItemGroup>
 
     <ItemGroup>
