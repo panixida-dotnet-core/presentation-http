@@ -19,12 +19,13 @@ using PANiXiDA.Core.Presentation.Scalar.DependencyInjection;
 using PANiXiDA.Core.Presentation.Http.DependencyInjection;
 using PANiXiDA.Core.Presentation.Http.Endpoints;
 using PANiXiDA.Core.Presentation.Http.Modularity;
-using PANiXiDA.Core.Presentation.Http.Options.Scalar;
 using PANiXiDA.Core.Presentation.Http.UnitTests.Endpoints.Fixtures.Groups;
 
 using System.Net;
 using System.Reflection;
 using System.Text.Json;
+
+using HttpOpenApiOptions = PANiXiDA.Core.Presentation.Http.Options.OpenApi.OpenApiOptions;
 
 namespace PANiXiDA.Core.Presentation.Http.UnitTests.Configurations;
 
@@ -81,7 +82,7 @@ public sealed class OpenApiConfigurationTests
     public void UseOpenApiConfiguration_ShouldHonorExplicitEnabledSetting(string environmentName, bool enabled)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = environmentName });
-        builder.Configuration[$"{ScalarOptions.SectionName}:{nameof(ScalarOptions.Enabled)}"] = enabled.ToString();
+        builder.Configuration[$"{HttpOpenApiOptions.SectionName}:{nameof(HttpOpenApiOptions.Enabled)}"] = enabled.ToString();
         builder.Services.AddOpenApiConfiguration(builder.Configuration, []);
         using var app = builder.Build();
 
@@ -96,7 +97,7 @@ public sealed class OpenApiConfigurationTests
         await using var app = await CreateStartedApplicationAsync(
             new Dictionary<string, string?>
             {
-                [ScalarOptions.SectionName + ":" + "Title"] = "Orders API Reference"
+                [HttpOpenApiOptions.SectionName + ":" + "Title"] = "Orders API Reference"
             },
             TestContext.Current.CancellationToken);
         using var client = CreateClient(app);
@@ -120,7 +121,7 @@ public sealed class OpenApiConfigurationTests
         await using var app = await CreateStartedApplicationAsync(
             new Dictionary<string, string?>
             {
-                [ScalarOptions.SectionName + ":" + "Favicon"] = "/favicon.svg"
+                [HttpOpenApiOptions.SectionName + ":" + "Favicon"] = "/favicon.svg"
             },
             TestContext.Current.CancellationToken,
             configureApplication: application =>
@@ -169,7 +170,7 @@ public sealed class OpenApiConfigurationTests
         await using var app = await CreateStartedApplicationAsync(
             new Dictionary<string, string?>
             {
-                [ScalarOptions.SectionName + ":" + "Favicon"] = "/favicon.svg"
+                [HttpOpenApiOptions.SectionName + ":" + "Favicon"] = "/favicon.svg"
             },
             TestContext.Current.CancellationToken,
             configureApplication: application =>
@@ -217,7 +218,7 @@ public sealed class OpenApiConfigurationTests
         await using var app = await CreateStartedApplicationAsync(
             new Dictionary<string, string?>
             {
-                [ScalarOptions.SectionName + ":" + "Favicon"] = favicon
+                [HttpOpenApiOptions.SectionName + ":" + "Favicon"] = favicon
             },
             TestContext.Current.CancellationToken);
         using var client = CreateClient(app);
@@ -693,7 +694,7 @@ public sealed class OpenApiConfigurationTests
 
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            [ScalarOptions.SectionName + ":" + "Favicon"] = "/favicon.svg"
+            [HttpOpenApiOptions.SectionName + ":" + "Favicon"] = "/favicon.svg"
         });
         builder.Services.AddOpenApiConfiguration(builder.Configuration, []);
 

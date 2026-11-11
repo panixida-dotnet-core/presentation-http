@@ -1,6 +1,6 @@
-namespace PANiXiDA.Core.Presentation.Http.Options.Scalar;
+namespace PANiXiDA.Core.Presentation.Http.Options.OpenApi;
 
-internal sealed class ScalarOptions
+internal sealed class OpenApiOptions
 {
     public const string SectionName = "ScalarConfiguration";
 

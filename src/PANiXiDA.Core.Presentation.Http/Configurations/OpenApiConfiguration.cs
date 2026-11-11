@@ -10,16 +10,12 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
-using PANiXiDA.Core.Presentation.Http.Modularity;
-using PANiXiDA.Core.Presentation.Http.Options.Scalar;
-using PANiXiDA.Core.Presentation.Http.Transformers;
 using PANiXiDA.Core.ApiDocumentation.DependencyInjection;
-
-
+using PANiXiDA.Core.Presentation.Http.Modularity;
+using PANiXiDA.Core.Presentation.Http.Options.OpenApi;
+using PANiXiDA.Core.Presentation.Http.Transformers;
 
 using System.Diagnostics.CodeAnalysis;
-
-using ScalarOptions = PANiXiDA.Core.Presentation.Http.Options.Scalar.ScalarOptions;
 
 namespace PANiXiDA.Core.Presentation.Http.Configurations;
 
@@ -61,9 +57,9 @@ internal static class OpenApiConfiguration
         services.Replace(ServiceDescriptor.Singleton<IApiVersionDescriptionProvider>(serviceProvider =>
             serviceProvider.GetRequiredService<HttpModuleApiVersionDescriptionProvider>()));
 
-        services.AddSingleton<IValidateOptions<ScalarOptions>, ScalarOptionsValidator>();
-        services.AddOptions<ScalarOptions>()
-            .Bind(configuration.GetSection(ScalarOptions.SectionName))
+        services.AddSingleton<IValidateOptions<OpenApiOptions>, OpenApiOptionsValidator>();
+        services.AddOptions<OpenApiOptions>()
+            .Bind(configuration.GetSection(OpenApiOptions.SectionName))
             .ValidateOnStart();
         services.AddApiDocumentSource<HttpApiDocumentSource>();
         return services;
@@ -71,8 +67,8 @@ internal static class OpenApiConfiguration
 
     internal static WebApplication UseOpenApiConfiguration(this WebApplication app)
     {
-        var scalarOptions = app.Services.GetRequiredService<IOptions<ScalarOptions>>().Value;
-        if (scalarOptions.Enabled ?? app.Environment.IsDevelopment())
+        var options = app.Services.GetRequiredService<IOptions<OpenApiOptions>>().Value;
+        if (options.Enabled ?? app.Environment.IsDevelopment())
         {
             app.MapOpenApi()
                 .WithDocumentPerVersion();
