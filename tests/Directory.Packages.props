@@ -1,7 +1,0 @@
-<Project>
-    <Import Project="../Directory.Packages.props" />
-
-    <ItemGroup>
-        <PackageVersion Include="PANiXiDA.Core.Presentation.Scalar" Version="1.0.2" />
-    </ItemGroup>
-</Project>
