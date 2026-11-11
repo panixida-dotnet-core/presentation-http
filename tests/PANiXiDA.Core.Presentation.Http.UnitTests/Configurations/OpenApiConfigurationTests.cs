@@ -75,6 +75,21 @@ public sealed class OpenApiConfigurationTests
         routePatterns.ShouldNotContain("/scalar/{documentName?}");
     }
 
+    [Theory(DisplayName = "Explicit OpenAPI availability overrides the environment default")]
+    [InlineData("Production", true)]
+    [InlineData("Development", false)]
+    public void UseOpenApiConfiguration_ShouldHonorExplicitEnabledSetting(string environmentName, bool enabled)
+    {
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = environmentName });
+        builder.Configuration[$"{ScalarOptions.SectionName}:{nameof(ScalarOptions.Enabled)}"] = enabled.ToString();
+        builder.Services.AddOpenApiConfiguration(builder.Configuration, []);
+        using var app = builder.Build();
+
+        app.UseOpenApiConfiguration();
+
+        GetRoutePatterns(app).Contains("/openapi/{documentName}.json").ShouldBe(enabled);
+    }
+
     [Fact(DisplayName = "OpenAPI configuration uses configured Scalar document title in Development")]
     public async Task UseOpenApiConfiguration_ShouldUseConfiguredScalarDocumentTitleInDevelopment()
     {
