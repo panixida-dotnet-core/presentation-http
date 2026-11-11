@@ -5,7 +5,7 @@
     </PropertyGroup>
     <ItemGroup>
         <PackageVersion Include="PANiXiDA.Core.ApiDocumentation" Version="1.0.2" />
-        <PackageVersion Include="PANiXiDA.Core.Presentation.Scalar" Version="[1.0.1,2.0.0)" />
+        <PackageVersion Include="PANiXiDA.Core.Presentation.Scalar" Version="1.0.2" />
         <PackageVersion Include="Asp.Versioning.Http" Version="10.2.3" />
         <PackageVersion Include="Asp.Versioning.OpenApi" Version="10.2.3" />
         <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.14" />
