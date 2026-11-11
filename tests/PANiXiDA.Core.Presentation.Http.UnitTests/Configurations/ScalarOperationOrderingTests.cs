@@ -18,7 +18,7 @@ using Scalar.AspNetCore;
 using System.Net;
 using System.Text.Json;
 
-using ScalarOptions = PANiXiDA.Core.Presentation.Scalar.Options.ApiDocumentationOptions;
+using ScalarOptions = PANiXiDA.Core.Presentation.Scalar.Options.ApiDocumentation.ApiDocumentationOptions;
 
 namespace PANiXiDA.Core.Presentation.Http.UnitTests.Configurations;
 
