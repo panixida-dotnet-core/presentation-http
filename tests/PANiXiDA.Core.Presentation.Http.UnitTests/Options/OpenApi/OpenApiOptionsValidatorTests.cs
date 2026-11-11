@@ -7,21 +7,21 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 using PANiXiDA.Core.Presentation.Http.DependencyInjection;
-using PANiXiDA.Core.Presentation.Http.Options.Scalar;
+using PANiXiDA.Core.Presentation.Http.Options.OpenApi;
 
 using System.Text;
 
-namespace PANiXiDA.Core.Presentation.Http.UnitTests.Options.Scalar;
+namespace PANiXiDA.Core.Presentation.Http.UnitTests.Options.OpenApi;
 
-public sealed class ScalarOptionsValidatorTests
+public sealed class OpenApiOptionsValidatorTests
 {
-    [Theory(DisplayName = "Scalar options allow defaults and configured Bearer scheme names")]
+    [Theory(DisplayName = "OpenAPI options allow defaults and configured Bearer scheme names")]
     [InlineData("{}", new string[] { })]
     [InlineData("""{"ScalarConfiguration":{"BearerAuthenticationSchemes":null}}""", new string[] { })]
     [InlineData("""{"ScalarConfiguration":{"BearerAuthenticationSchemes":[]}}""", new string[] { })]
     [InlineData("""{"ScalarConfiguration":{"BearerAuthenticationSchemes":["CustomBearer","OpenIddict.Server.AspNetCore"]}}""",
         new[] { "CustomBearer", "OpenIddict.Server.AspNetCore" })]
-    public async Task AddHttp_ShouldAcceptValidScalarOptions(string json, string[] expectedSchemes)
+    public async Task AddHttp_ShouldAcceptValidOpenApiOptions(string json, string[] expectedSchemes)
     {
         var builder = CreateBuilder(json);
         builder.Services.AddHttp(builder.Configuration);
@@ -29,16 +29,16 @@ public sealed class ScalarOptionsValidatorTests
 
         await app.StartAsync(TestContext.Current.CancellationToken);
 
-        var options = app.Services.GetRequiredService<IOptions<ScalarOptions>>().Value;
+        var options = app.Services.GetRequiredService<IOptions<OpenApiOptions>>().Value;
         options.BearerAuthenticationSchemes.ShouldBe(expectedSchemes);
     }
 
-    [Theory(DisplayName = "Invalid Scalar Bearer scheme names prevent startup")]
+    [Theory(DisplayName = "Invalid OpenAPI Bearer scheme names prevent startup")]
     [InlineData("[null]")]
     [InlineData("[\"\"]")]
     [InlineData("[\" \"]")]
     [InlineData("[\"CustomBearer\",\"\"]")]
-    public async Task AddHttp_ShouldRejectInvalidScalarOptions(string schemesJson)
+    public async Task AddHttp_ShouldRejectInvalidOpenApiOptions(string schemesJson)
     {
         var json = $$$"""{"ScalarConfiguration":{"BearerAuthenticationSchemes":{{{schemesJson}}}}}""";
         var builder = CreateBuilder(json);
@@ -48,22 +48,22 @@ public sealed class ScalarOptionsValidatorTests
         var exception = await Should.ThrowAsync<OptionsValidationException>(
             () => app.StartAsync(TestContext.Current.CancellationToken));
 
-        exception.OptionsType.ShouldBe(typeof(ScalarOptions));
+        exception.OptionsType.ShouldBe(typeof(OpenApiOptions));
         exception.Message.ShouldContain("ScalarConfiguration:BearerAuthenticationSchemes");
     }
 
-    [Fact(DisplayName = "A null Scalar Bearer scheme collection prevents startup")]
+    [Fact(DisplayName = "A null OpenAPI Bearer scheme collection prevents startup")]
     public async Task AddHttp_ShouldRejectNullBearerSchemeCollection()
     {
         var builder = CreateBuilder("{}");
         builder.Services.AddHttp(builder.Configuration);
-        builder.Services.Configure<ScalarOptions>(options => options.BearerAuthenticationSchemes = null!);
+        builder.Services.Configure<OpenApiOptions>(options => options.BearerAuthenticationSchemes = null!);
         await using var app = builder.Build();
 
         var exception = await Should.ThrowAsync<OptionsValidationException>(
             () => app.StartAsync(TestContext.Current.CancellationToken));
 
-        exception.OptionsType.ShouldBe(typeof(ScalarOptions));
+        exception.OptionsType.ShouldBe(typeof(OpenApiOptions));
         exception.Message.ShouldContain("ScalarConfiguration:BearerAuthenticationSchemes");
     }
 

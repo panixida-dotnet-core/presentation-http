@@ -8,12 +8,12 @@ using Microsoft.OpenApi;
 
 using OpenIddict.Validation.AspNetCore;
 
-using PANiXiDA.Core.Presentation.Http.Options.Scalar;
+using HttpOpenApiOptions = PANiXiDA.Core.Presentation.Http.Options.OpenApi.OpenApiOptions;
 
 namespace PANiXiDA.Core.Presentation.Http.Transformers;
 
 internal sealed class BearerSecurityOpenApiOperationTransformer(
-    IOptions<ScalarOptions> options) : IOpenApiOperationTransformer
+    IOptions<HttpOpenApiOptions> options) : IOpenApiOperationTransformer
 {
     private const string SchemeName = "Bearer";
 

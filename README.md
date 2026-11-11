@@ -372,12 +372,22 @@ Non-nullable reference properties in responses must contain non-null values. Val
 
 ## OpenAPI
 
-In `Development`, `UseHttp` exposes:
+In `Development`, `UseHttp` exposes OpenAPI documents at `/openapi/v1.json`, `/openapi/v2.json`, and so on. It contributes module/version descriptors to `PANiXiDA.Core.ApiDocumentation`.
 
-- OpenAPI documents at `/openapi/v1.json`, `/openapi/v2.json`, and so on for the mapped API versions;
-- Scalar API reference at `/scalar`.
+Starting with 6.0, the host references `PANiXiDA.Core.Presentation.Scalar` and explicitly registers its UI:
 
-OpenAPI registration also enables Scalar transformers for Scalar-specific document extensions.
+```csharp
+using PANiXiDA.Core.Presentation.Scalar.DependencyInjection;
+
+builder.Services.AddHttp(builder.Configuration);
+builder.Services.AddApiDocumentation(builder.Configuration);
+var app = builder.Build();
+app.UseHttp();
+app.UseApiDocumentation();
+app.Run();
+```
+
+The separate Scalar presenter adds Scalar-specific OpenAPI transformers and operation ordering when connected. The HTTP package has no Scalar NuGet dependency.
 
 ### Operation order
 
@@ -506,7 +516,7 @@ Routes without a version appear in every document of their module. A module with
 Final document names must be unique ignoring case, including common module documents and versioned documents. A presentation assembly can belong to only one module.
 Without modules, documents follow visible API versions (`v1`, `v2`, and so on); when only unversioned endpoints are visible, they use the configured default version (`v1` by default).
 
-The Scalar browser tab title and favicon can be configured from application configuration.
+The separate Scalar presenter reads the browser tab title and favicon from the same application configuration.
 If either value is missing or blank, Scalar keeps its corresponding default.
 
 ```json
@@ -519,13 +529,13 @@ If either value is missing or blank, Scalar keeps its corresponding default.
 ```
 
 Place local icons in the host's `wwwroot` (`Microsoft.NET.Sdk.Web`).
-In `Development`, a nonblank `Favicon` makes `UseHttp` call `MapStaticAssets().ShortCircuit()` for all host assets.
+When documentation is enabled, a nonblank `Favicon` makes `UseApiDocumentation` call `MapStaticAssets().ShortCircuit()` for all host assets.
 These assets must be public: middleware after routing, including authorization and CORS, is skipped.
 `UseHttp` ensures forwarded headers, request logging, exception handling, and HTTPS redirection run before static assets.
 Host-specific middleware needed for assets must run before `UseHttp`; for HSTS behind a proxy, call `UseForwardedHeaders()` then `UseHsts()` before it.
 
 With `CreateSlimBuilder`, also call `builder.WebHost.UseStaticWebAssets()` in `Development` before `Build()`.
-Outside `Development`, OpenAPI, Scalar, and automatic asset mapping are disabled.
+Outside `Development`, documentation is disabled by default. `ScalarConfiguration:Enabled` explicitly overrides this for both OpenAPI routes and the separate Scalar presenter.
 
 ## API Versioning
 

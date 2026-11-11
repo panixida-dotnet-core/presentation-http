@@ -7,18 +7,17 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.OpenApi;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Options;
 
+using PANiXiDA.Core.ApiDocumentation;
 using PANiXiDA.Core.Presentation.Http.Configurations;
 using PANiXiDA.Core.Presentation.Http.DependencyInjection;
 using PANiXiDA.Core.Presentation.Http.Endpoints;
 using PANiXiDA.Core.Presentation.Http.Modularity;
-using PANiXiDA.Core.Presentation.Http.Options.Scalar;
+using PANiXiDA.Core.Presentation.Http.Options.OpenApi;
 using PANiXiDA.Core.Presentation.Http.UnitTests.Endpoints.Fixtures.Groups;
 
 using System.Net;
@@ -40,40 +39,8 @@ public sealed class OpenApiConfigurationTests
         result.ShouldBeSameAs(services);
     }
 
-    [Fact(DisplayName = "OpenAPI configuration applies Scalar transformers")]
-    public void AddOpenApiConfiguration_ShouldApplyScalarTransformers()
-    {
-        var builder = WebApplication.CreateBuilder();
-        builder.Services.AddHttp(builder.Configuration);
-        using var app = builder.Build();
-        var options = app.Services.GetRequiredService<IOptionsMonitor<OpenApiOptions>>().Get("v1");
-
-        options.ShouldNotBeNull();
-    }
-
-    [Fact(DisplayName = "OpenAPI configuration binds Scalar API reference title and favicon")]
-    public void AddOpenApiConfiguration_ShouldBindScalarApiReferenceTitleAndFavicon()
-    {
-        var services = new ServiceCollection();
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                [ScalarOptions.SectionName + ":" + nameof(ScalarOptions.Title)] = "Orders API Reference",
-                [ScalarOptions.SectionName + ":" + nameof(ScalarOptions.Favicon)] = "/favicon.svg"
-            })
-            .Build();
-
-        services.AddOpenApiConfiguration(configuration, []);
-
-        using var serviceProvider = services.BuildServiceProvider();
-        var options = serviceProvider.GetRequiredService<IOptions<ScalarOptions>>().Value;
-
-        options.Title.ShouldBe("Orders API Reference");
-        options.Favicon.ShouldBe("/favicon.svg");
-    }
-
-    [Fact(DisplayName = "OpenAPI configuration maps the specification and Scalar endpoints in Development")]
-    public void UseOpenApiConfiguration_ShouldMapOpenApiAndScalarEndpointsInDevelopment()
+    [Fact(DisplayName = "OpenAPI configuration maps the specification in Development")]
+    public void UseOpenApiConfiguration_ShouldMapOpenApiEndpointInDevelopment()
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
@@ -90,41 +57,29 @@ public sealed class OpenApiConfigurationTests
         var routePatterns = GetRoutePatterns(app);
 
         routePatterns.ShouldContain("/openapi/{documentName}.json");
-        routePatterns.ShouldContain("/scalar/{documentName?}");
     }
 
-    [Fact(DisplayName = "OpenAPI configuration uses configured Scalar document title in Development")]
-    public async Task UseOpenApiConfiguration_ShouldUseConfiguredScalarDocumentTitleInDevelopment()
+    [Theory(DisplayName = "Explicit OpenAPI availability overrides the environment default")]
+    [InlineData("Production", true)]
+    [InlineData("Development", false)]
+    public void UseOpenApiConfiguration_ShouldHonorExplicitEnabledSetting(string environmentName, bool enabled)
     {
-        await using var app = await CreateStartedApplicationAsync(
-            new Dictionary<string, string?>
-            {
-                [ScalarOptions.SectionName + ":" + nameof(ScalarOptions.Title)] = "Orders API Reference"
-            },
-            TestContext.Current.CancellationToken);
-        using var client = CreateClient(app);
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = environmentName });
+        builder.Configuration[$"{OpenApiOptions.SectionName}:{nameof(OpenApiOptions.Enabled)}"] = enabled.ToString();
+        builder.Services.AddOpenApiConfiguration(builder.Configuration, []);
+        using var app = builder.Build();
 
-        using var response = await client.GetAsync("/scalar", TestContext.Current.CancellationToken);
-        var content = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        app.UseOpenApiConfiguration();
 
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        content.ShouldContain("<title>Orders API Reference</title>");
+        GetRoutePatterns(app).Contains("/openapi/{documentName}.json").ShouldBe(enabled);
     }
 
-    [Theory(DisplayName = "OpenAPI configuration short-circuits favicon requests after routing")]
-    [InlineData(false, false)]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    [InlineData(true, true)]
-    public async Task UseOpenApiConfiguration_ShouldServeConfiguredHostFavicon(
-        bool mapStaticAssetsExplicitly,
-        bool useSlimBuilder)
+    [Theory(DisplayName = "Host static assets short-circuit middleware after HTTP routing")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UseHttp_ShouldServeShortCircuitedHostAssets(bool useSlimBuilder)
     {
-        await using var app = await CreateStartedApplicationAsync(
-            new Dictionary<string, string?>
-            {
-                [ScalarOptions.SectionName + ":" + nameof(ScalarOptions.Favicon)] = "/favicon.svg"
-            },
+        await using var app = await CreateStartedApplicationWithStaticAssetsAsync(
             TestContext.Current.CancellationToken,
             configureApplication: application =>
             {
@@ -133,10 +88,6 @@ public sealed class OpenApiConfigurationTests
                     context.Response.Headers["X-Before-Routing"] = "executed";
                     await next(context);
                 });
-                if (mapStaticAssetsExplicitly)
-                {
-                    application.MapStaticAssets();
-                }
             },
             useSlimBuilder: useSlimBuilder,
             configureAfterHttp: application => application.Use(async (context, next) =>
@@ -146,7 +97,6 @@ public sealed class OpenApiConfigurationTests
             }));
         using var client = CreateClient(app);
 
-        var scalarContent = await client.GetStringAsync("/scalar", TestContext.Current.CancellationToken);
         using var healthResponse = await client.GetAsync("/health", TestContext.Current.CancellationToken);
         using var response = await client.GetAsync("/favicon.svg", TestContext.Current.CancellationToken);
         var favicon = await response.Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken);
@@ -156,7 +106,6 @@ public sealed class OpenApiConfigurationTests
         using var expectedContent = new MemoryStream();
         await expectedStream.CopyToAsync(expectedContent, TestContext.Current.CancellationToken);
 
-        scalarContent.ShouldContain("\"favicon\":\"/favicon.svg\"");
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         response.Content.Headers.ContentType?.MediaType.ShouldBe("image/svg+xml");
         response.Headers.GetValues("X-Before-Routing").ShouldBe(["executed"]);
@@ -167,13 +116,9 @@ public sealed class OpenApiConfigurationTests
     }
 
     [Fact(DisplayName = "Short-circuited assets preserve host HTTPS and HSTS middleware and API authorization")]
-    public async Task UseOpenApiConfiguration_ShouldPreserveHostMiddlewareAndApiAuthorization()
+    public async Task UseHttp_ShouldPreserveHostMiddlewareAndApiAuthorization()
     {
-        await using var app = await CreateStartedApplicationAsync(
-            new Dictionary<string, string?>
-            {
-                [ScalarOptions.SectionName + ":" + nameof(ScalarOptions.Favicon)] = "/favicon.svg"
-            },
+        await using var app = await CreateStartedApplicationWithStaticAssetsAsync(
             TestContext.Current.CancellationToken,
             configureApplication: application =>
             {
@@ -209,28 +154,6 @@ public sealed class OpenApiConfigurationTests
         httpsResponse.Headers.Contains("Strict-Transport-Security").ShouldBeTrue();
         (await httpsResponse.Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken)).ShouldNotBeEmpty();
         protectedResponse.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
-    }
-
-    [Theory(DisplayName = "OpenAPI configuration keeps the default favicon and does not map assets for a blank favicon")]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData(" \t\r\n")]
-    public async Task UseOpenApiConfiguration_ShouldIgnoreBlankFavicon(string? favicon)
-    {
-        await using var app = await CreateStartedApplicationAsync(
-            new Dictionary<string, string?>
-            {
-                [ScalarOptions.SectionName + ":" + nameof(ScalarOptions.Favicon)] = favicon
-            },
-            TestContext.Current.CancellationToken);
-        using var client = CreateClient(app);
-
-        var scalarContent = await client.GetStringAsync("/scalar", TestContext.Current.CancellationToken);
-        using var response = await client.GetAsync("/favicon.svg", TestContext.Current.CancellationToken);
-
-        scalarContent.ShouldContain("favicon.svg");
-        scalarContent.ShouldNotContain("\"favicon\":\"/favicon.svg\"");
-        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Theory(DisplayName = "OpenAPI configuration emits strict numeric schemas")]
@@ -319,16 +242,11 @@ public sealed class OpenApiConfigurationTests
         using var missingVersionResponse = await client.GetAsync(
             "/openapi/core-v2.json",
             TestContext.Current.CancellationToken);
-        using var scalarResponse = await client.GetAsync(
-            "/scalar",
-            TestContext.Current.CancellationToken);
         var documentedContent = await documentedResponse.Content.ReadAsStringAsync(
             TestContext.Current.CancellationToken);
         var versionTwoContent = await versionTwoResponse.Content.ReadAsStringAsync(
             TestContext.Current.CancellationToken);
         var secondModuleContent = await secondModuleResponse.Content.ReadAsStringAsync(
-            TestContext.Current.CancellationToken);
-        var scalarContent = await scalarResponse.Content.ReadAsStringAsync(
             TestContext.Current.CancellationToken);
         using var documentedDocument = JsonDocument.Parse(documentedContent);
         using var versionTwoDocument = JsonDocument.Parse(versionTwoContent);
@@ -338,7 +256,6 @@ public sealed class OpenApiConfigurationTests
         versionTwoResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
         secondModuleResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
         missingVersionResponse.StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        scalarResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
         documentedDocument.RootElement
             .GetProperty("paths")
             .TryGetProperty("/api/v1/ordered/first", out _)
@@ -369,15 +286,15 @@ public sealed class OpenApiConfigurationTests
             .GetProperty("title")
             .GetString()
             .ShouldBe("Test endpoints v1");
-        scalarContent.ShouldContain("Test endpoints v1");
-        scalarContent.ShouldContain("Test endpoints v2");
-        scalarContent.ShouldContain("Core endpoints v1");
-        scalarContent.ShouldContain("openapi/tests-v1.json");
-        scalarContent.ShouldContain("openapi/tests-v2.json");
-        scalarContent.ShouldContain("openapi/core-v1.json");
-        scalarContent.ShouldNotContain("openapi/core-v2.json");
-        scalarContent.ShouldNotContain("openapi/tests.json");
-        scalarContent.ShouldNotContain("openapi/core.json");
+        GetDocuments(app)
+            .OrderBy(document => document.Path)
+            .Select(document => (document.Path, document.Title))
+            .ShouldBe([
+                ("/openapi/core-v1.json", "Core endpoints v1"),
+                ("/openapi/tests-v1.json", "Test endpoints v1"),
+                ("/openapi/tests-v2.json", "Test endpoints v2"),
+                ("/openapi/v1.json", "v1")
+            ]);
         (await client.GetStringAsync("/connect", TestContext.Current.CancellationToken))
             .ShouldBe("connect");
     }
@@ -431,7 +348,7 @@ public sealed class OpenApiConfigurationTests
         var content = await client.GetStringAsync(
             "/openapi/identity.json",
             TestContext.Current.CancellationToken);
-        var scalarContent = await client.GetStringAsync("/scalar", TestContext.Current.CancellationToken);
+        var documents = GetDocuments(app);
         using var document = JsonDocument.Parse(content);
 
         document.RootElement.GetProperty("paths")
@@ -444,11 +361,12 @@ public sealed class OpenApiConfigurationTests
             .GetProperty("title")
             .GetString()
             .ShouldBe("Identity endpoints");
-        scalarContent.ShouldContain("openapi/identity.json");
-        scalarContent.ShouldNotContain("openapi/identity-v1.json");
+        var identityDocument = documents.Single(item => item.Name == "identity");
+        identityDocument.Path.ShouldBe("/openapi/identity.json");
+        identityDocument.Version.ShouldBe("unversioned");
         if (!includeExternalVersions)
         {
-            scalarContent.ShouldNotContain("openapi/v1.json");
+            documents.ShouldHaveSingleItem();
         }
         using var response = await client.GetAsync("/connect/first", TestContext.Current.CancellationToken);
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -526,12 +444,10 @@ public sealed class OpenApiConfigurationTests
             TestContext.Current.CancellationToken);
         using var client = CreateClient(app);
 
-        var scalarContent = await client.GetStringAsync("/scalar", TestContext.Current.CancellationToken);
         using var response = await client.GetAsync("/openapi/empty-v1.json", TestContext.Current.CancellationToken);
 
-        scalarContent.ShouldContain("openapi/tests-v1.json");
-        scalarContent.ShouldContain("openapi/tests-v2.json");
-        scalarContent.ShouldNotContain("Empty module");
+        GetDocuments(app).Select(document => document.Path).Order()
+            .ShouldBe(["/openapi/tests-v1.json", "/openapi/tests-v2.json"]);
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
@@ -579,13 +495,13 @@ public sealed class OpenApiConfigurationTests
         using var client = CreateClient(app);
         var documentPrefix = useModule ? "tests-" : string.Empty;
 
-        var scalarContent = await client.GetStringAsync("/scalar", TestContext.Current.CancellationToken);
         using var response = await client.GetAsync(
             $"/openapi/{documentPrefix}v3.json",
             TestContext.Current.CancellationToken);
 
-        scalarContent.ShouldContain($"openapi/{documentPrefix}v1.json");
-        scalarContent.ShouldNotContain($"openapi/{documentPrefix}v3.json");
+        var documents = GetDocuments(app);
+        documents.ShouldContain(document => document.Path == $"/openapi/{documentPrefix}v1.json");
+        documents.ShouldNotContain(document => document.Path == $"/openapi/{documentPrefix}v3.json");
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
         var content = await client.GetStringAsync(
             $"/openapi/{documentPrefix}v1.json",
@@ -636,13 +552,11 @@ public sealed class OpenApiConfigurationTests
         await app.StartAsync(TestContext.Current.CancellationToken);
         using var client = CreateClient(app);
 
-        var scalarContent = await client.GetStringAsync("/scalar", TestContext.Current.CancellationToken);
         using var hiddenResponse = await client.GetAsync(
             "/openapi/v3.json",
             TestContext.Current.CancellationToken);
 
-        scalarContent.ShouldContain($"openapi/v{defaultVersion}.json");
-        scalarContent.ShouldNotContain("openapi/v3.json");
+        GetDocuments(app).ShouldHaveSingleItem().Path.ShouldBe($"/openapi/v{defaultVersion}.json");
         hiddenResponse.StatusCode.ShouldBe(HttpStatusCode.NotFound);
         var content = await client.GetStringAsync(
             $"/openapi/v{defaultVersion}.json",
@@ -678,20 +592,16 @@ public sealed class OpenApiConfigurationTests
         paths.TryGetProperty(excludedPath, out _).ShouldBeFalse();
     }
 
-    [Theory(DisplayName = "OpenAPI configuration does not map OpenAPI, Scalar, or favicon assets outside Development")]
+    [Theory(DisplayName = "OpenAPI configuration does not map the specification outside Development by default")]
     [InlineData("Production")]
     [InlineData("Staging")]
-    public void UseOpenApiConfiguration_ShouldNotMapOpenApiOrScalarEndpointsOutsideDevelopment(string environmentName)
+    public void UseOpenApiConfiguration_ShouldNotMapOpenApiEndpointOutsideDevelopment(string environmentName)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
             EnvironmentName = environmentName
         });
 
-        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
-        {
-            [ScalarOptions.SectionName + ":" + nameof(ScalarOptions.Favicon)] = "/favicon.svg"
-        });
         builder.Services.AddOpenApiConfiguration(builder.Configuration, []);
 
         using var app = builder.Build();
@@ -702,8 +612,6 @@ public sealed class OpenApiConfigurationTests
         var routePatterns = GetRoutePatterns(app);
 
         routePatterns.ShouldNotContain("/openapi/{documentName}.json");
-        routePatterns.ShouldNotContain("/scalar/{documentName?}");
-        routePatterns.ShouldNotContain("favicon.svg");
     }
 
     private static List<string?> GetRoutePatterns(WebApplication app)
@@ -714,8 +622,12 @@ public sealed class OpenApiConfigurationTests
             .Select(static endpoint => endpoint.RoutePattern.RawText)];
     }
 
-    private static async Task<WebApplication> CreateStartedApplicationAsync(
-        Dictionary<string, string?> configurationValues,
+    private static IReadOnlyCollection<ApiDocumentDescriptor> GetDocuments(WebApplication app)
+    {
+        return app.Services.GetRequiredService<IApiDocumentSource>().GetDocuments();
+    }
+
+    private static async Task<WebApplication> CreateStartedApplicationWithStaticAssetsAsync(
         CancellationToken cancellationToken,
         Action<WebApplication>? configureApplication = null,
         bool useSlimBuilder = false,
@@ -737,7 +649,6 @@ public sealed class OpenApiConfigurationTests
         }
 
         builder.WebHost.UseUrls("http://127.0.0.1:0");
-        builder.Configuration.AddInMemoryCollection(configurationValues);
         builder.Services.AddHttp(builder.Configuration);
         configureBuilder?.Invoke(builder);
 
@@ -745,7 +656,7 @@ public sealed class OpenApiConfigurationTests
         configureApplication?.Invoke(app);
         app.UseHttp();
         configureAfterHttp?.Invoke(app);
-
+        app.MapStaticAssets().ShortCircuit();
         await app.StartAsync(cancellationToken);
 
         return app;
