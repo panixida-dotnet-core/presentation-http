@@ -6,7 +6,5 @@ internal sealed class ScalarOptions
 
     public bool? Enabled { get; set; }
 
-
-
     public string[] BearerAuthenticationSchemes { get; set; } = [];
 }
