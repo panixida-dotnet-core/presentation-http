@@ -15,6 +15,20 @@ namespace PANiXiDA.Core.Presentation.Http.UnitTests.Options.OpenApi;
 
 public sealed class OpenApiOptionsValidatorTests
 {
+    [Theory(DisplayName = "A configured OpenAPI cache duration must be positive")]
+    [InlineData("00:00:00")]
+    [InlineData("-00:01:00")]
+    public async Task AddHttp_ShouldRejectNonpositiveOpenApiCacheDuration(string duration)
+    {
+        var builder = CreateBuilder($$$"""{"ScalarConfiguration":{"OpenApiCacheDuration":"{{{duration}}}"}}""");
+        builder.Services.AddHttp(builder.Configuration);
+        await using var app = builder.Build();
+
+        var exception = await Should.ThrowAsync<OptionsValidationException>(
+            () => app.StartAsync(TestContext.Current.CancellationToken));
+        exception.Message.ShouldContain("ScalarConfiguration:OpenApiCacheDuration");
+    }
+
     [Theory(DisplayName = "OpenAPI options allow defaults and configured Bearer scheme names")]
     [InlineData("{}", new string[] { })]
     [InlineData("""{"ScalarConfiguration":{"BearerAuthenticationSchemes":null}}""", new string[] { })]

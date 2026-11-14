@@ -6,5 +6,7 @@ internal sealed class OpenApiOptions
 
     public bool? Enabled { get; set; }
 
+    public TimeSpan? OpenApiCacheDuration { get; set; }
+
     public string[] BearerAuthenticationSchemes { get; set; } = [];
 }
