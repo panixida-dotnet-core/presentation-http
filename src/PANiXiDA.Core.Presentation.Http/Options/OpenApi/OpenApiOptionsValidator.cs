@@ -13,6 +13,12 @@ internal sealed class OpenApiOptionsValidator : IValidateOptions<OpenApiOptions>
                 $"{OpenApiOptions.SectionName}:BearerAuthenticationSchemes must be an array of non-empty scheme names.");
         }
 
+        if (options.OpenApiCacheDuration <= TimeSpan.Zero)
+        {
+            return ValidateOptionsResult.Fail(
+                $"{OpenApiOptions.SectionName}:OpenApiCacheDuration must be greater than zero when set.");
+        }
+
         return ValidateOptionsResult.Success;
     }
 }
