@@ -90,7 +90,6 @@ internal static class OpenApiConfiguration
                     pipeline.Run(generateDocument);
                     var serveCachedDocument = pipeline.Build();
 
-                    // Use the host's output cache when it has already handled the request.
                     builder.RequestDelegate = context => context.Features.Get<IOutputCacheFeature>() is null
                         ? serveCachedDocument(context)
                         : generateDocument(context);
