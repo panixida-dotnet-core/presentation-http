@@ -389,6 +389,20 @@ app.Run();
 
 The separate Scalar presenter adds Scalar-specific OpenAPI transformers and operation ordering when connected. The HTTP package has no Scalar NuGet dependency.
 
+### Cache OpenAPI documents
+
+Set a positive `ScalarConfiguration:OpenApiCacheDuration` to enable ASP.NET Core output caching on the OpenAPI endpoint. By default, documents are generated on each request.
+
+```json
+{
+  "ScalarConfiguration": {
+    "OpenApiCacheDuration": "00:10:00"
+  }
+}
+```
+
+Use this setting when the generated document can be reused for requests with the same URL. The cache key includes the scheme, host and path base after forwarded headers are applied. Authenticated requests and requests with an `Authorization` header bypass the default cache policy. With the default in-memory store, each application instance caches its own responses. The duration starts when a response is cached. The first request after expiry generates a fresh document.
+
 ### Operation order
 
 Scalar orders operations within each section as `GET`, `POST`, `PUT`, `PATCH`, `DELETE`.

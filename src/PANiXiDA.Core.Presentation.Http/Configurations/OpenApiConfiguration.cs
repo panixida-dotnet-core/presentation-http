@@ -2,7 +2,9 @@ using Asp.Versioning.ApiExplorer;
 using Asp.Versioning.OpenApi;
 
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Mvc.ApiExplorer;
+using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -61,6 +63,7 @@ internal static class OpenApiConfiguration
         services.AddOptions<OpenApiOptions>()
             .Bind(configuration.GetSection(OpenApiOptions.SectionName))
             .ValidateOnStart();
+        services.AddOutputCache();
         services.AddApiDocumentSource<HttpApiDocumentSource>();
         return services;
     }
@@ -70,8 +73,29 @@ internal static class OpenApiConfiguration
         var options = app.Services.GetRequiredService<IOptions<OpenApiOptions>>().Value;
         if (options.Enabled ?? app.Environment.IsDevelopment())
         {
-            app.MapOpenApi()
-                .WithDocumentPerVersion();
+            var endpoint = app.MapOpenApi().WithDocumentPerVersion();
+            if (options.OpenApiCacheDuration is { } duration)
+            {
+                endpoint.CacheOutput(policy => policy.Expire(duration).VaryByValue(context =>
+                {
+                    var request = context.Request;
+                    return new("OpenApiServer", UriHelper.BuildAbsolute(request.Scheme, request.Host, request.PathBase));
+                }));
+
+                endpoint.Finally(builder =>
+                {
+                    var generateDocument = builder.RequestDelegate!;
+                    var pipeline = ((IApplicationBuilder)app).New();
+                    pipeline.UseOutputCache();
+                    pipeline.Run(generateDocument);
+                    var serveCachedDocument = pipeline.Build();
+
+                    // Use the host's output cache when it has already handled the request.
+                    builder.RequestDelegate = context => context.Features.Get<IOutputCacheFeature>() is null
+                        ? serveCachedDocument(context)
+                        : generateDocument(context);
+                });
+            }
         }
 
         return app;

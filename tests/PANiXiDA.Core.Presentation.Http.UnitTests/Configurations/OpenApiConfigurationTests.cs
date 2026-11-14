@@ -74,6 +74,101 @@ public sealed class OpenApiConfigurationTests
         GetRoutePatterns(app).Contains("/openapi/{documentName}.json").ShouldBe(enabled);
     }
 
+    [Theory(DisplayName = "OpenAPI caches only when enabled and supports an existing host output cache")]
+    [InlineData(false, false, 2)]
+    [InlineData(true, false, 1)]
+    [InlineData(true, true, 1)]
+    public async Task UseHttp_ShouldCacheOnlyConfiguredOpenApiResponses(
+        bool enableCache, bool useHostCache, int expectedGenerations)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = Environments.Development });
+        builder.WebHost.UseUrls("http://127.0.0.1:0");
+        if (enableCache)
+        {
+            builder.Configuration["ScalarConfiguration:OpenApiCacheDuration"] = "00:10:00";
+        }
+
+        var generationCount = 0;
+        builder.Services.AddHttp(builder.Configuration);
+        builder.Services.ConfigureAll<Microsoft.AspNetCore.OpenApi.OpenApiOptions>(options =>
+            options.AddDocumentTransformer((_, _, _) =>
+            {
+                Interlocked.Increment(ref generationCount);
+                return Task.CompletedTask;
+            }));
+
+        await using var app = builder.Build();
+        app.UseHttp();
+        if (useHostCache)
+        {
+            app.UseOutputCache();
+        }
+
+        var calls = 0;
+        var versionSet = app.NewApiVersionSet().Build();
+        app.MapGet("/counter", () => Interlocked.Increment(ref calls))
+            .WithApiVersionSet(versionSet)
+            .IsApiVersionNeutral();
+        await app.StartAsync(cancellationToken);
+        using var client = CreateClient(app);
+
+        var first = await client.GetStringAsync("/openapi/v1.json", cancellationToken);
+        var second = await client.GetStringAsync("/openapi/v1.json", cancellationToken);
+        (await client.GetStringAsync("/counter", cancellationToken)).ShouldBe("1");
+        (await client.GetStringAsync("/counter", cancellationToken)).ShouldBe("2");
+
+        second.ShouldBe(first);
+        generationCount.ShouldBe(expectedGenerations);
+
+        using var authenticated = new HttpRequestMessage(HttpMethod.Get, "/openapi/v1.json");
+        authenticated.Headers.Authorization = new("Bearer", "test-token");
+        using var response = await client.SendAsync(authenticated, cancellationToken);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        response.Headers.Age.ShouldBeNull();
+        generationCount.ShouldBe(expectedGenerations + 1);
+    }
+
+    [Fact(DisplayName = "Cached OpenAPI documents use the effective proxy URL including the prefix case")]
+    public async Task UseHttp_ShouldVaryCachedOpenApiByForwardedServerUrl()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = Environments.Development });
+        builder.WebHost.UseUrls("http://127.0.0.1:0");
+        builder.Configuration["ScalarConfiguration:OpenApiCacheDuration"] = "00:10:00";
+        builder.Configuration["ForwardedHeaders:ForwardedHeaders"] = "XForwardedHost, XForwardedProto, XForwardedPrefix";
+        builder.Services.AddHttp(builder.Configuration);
+        await using var app = builder.Build();
+        app.UseHttp();
+        app.MapGet("/example", static () => "example")
+            .WithApiVersionSet(app.NewApiVersionSet().HasApiVersion(new ApiVersion(1)).Build())
+            .MapToApiVersion(new ApiVersion(1));
+        await app.StartAsync(cancellationToken);
+        using var client = CreateClient(app);
+
+        foreach (var (host, prefix, cached) in new[]
+        {
+            ("api.example", "/Game", false),
+            ("api.example", "/game", false),
+            ("other.example", "/Game", false),
+            ("api.example", "/Game", true),
+            ("api.example", "/game", true)
+        })
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, "/openapi/v1.json");
+            request.Headers.Add("X-Forwarded-Proto", "https");
+            request.Headers.Add("X-Forwarded-Host", host);
+            request.Headers.Add("X-Forwarded-Prefix", prefix);
+            using var response = await client.SendAsync(request, cancellationToken);
+
+            response.StatusCode.ShouldBe(HttpStatusCode.OK);
+            response.Headers.Age.HasValue.ShouldBe(cached);
+            using var document = JsonDocument.Parse(await response.Content.ReadAsByteArrayAsync(cancellationToken));
+            document.RootElement.GetProperty("servers")[0].GetProperty("url").GetString()
+                .ShouldBe($"https://{host}{prefix}");
+        }
+    }
+
     [Theory(DisplayName = "Host static assets short-circuit middleware after HTTP routing")]
     [InlineData(false)]
     [InlineData(true)]
